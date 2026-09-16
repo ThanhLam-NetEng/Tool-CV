@@ -1,4 +1,4 @@
-// Default CV Template Data
+// Default CV Template Data (Sanitized Generic Demo Data for Security & Privacy)
 const defaultCvData = {
   theme: {
     template: 'harvard', // Default template: Harvard Standard
@@ -24,93 +24,73 @@ const defaultCvData = {
     sectionOrderSide: ['education', 'skills', 'languages', 'customSections']
   },
   header: {
-    name: 'Phạm Thanh Lâm',
-    role: 'Network Engineer · Computer Networks & Data Communications',
-    summary: 'Network Engineer focused on designing and validating complete solutions across network, security, and cloud environments. Experienced in building real-world systems end-to-end. Seeking Network/Security Engineering roles to contribute to practical system design and operations.',
+    name: 'Nguyễn Văn A',
+    role: 'Network & Security Engineer',
+    summary: 'Network & Security Engineer focused on designing, deploying, and validating high-availability network infrastructures, enterprise firewalls, and cloud security architectures.',
     contacts: [
-      { label: 'SĐT', value: '0868 745 540', link: 'tel:0868745540' },
-      { label: 'Email', value: 'phamthanhlam.work@gmail.com', link: 'mailto:phamthanhlam.work@gmail.com' },
-      { label: 'Ngày sinh', value: '15/10/2004', link: '' },
-      { label: 'Portfolio', value: 'thanhlam-neteng.github.io/Portfolio', link: 'https://thanhlam-neteng.github.io/Portfolio/' },
-      { label: 'GitHub', value: 'github.com/ThanhLam-NetEng', link: 'https://github.com/ThanhLam-NetEng' },
-      { label: 'LinkedIn', value: 'linkedin.com/in/thanhlam-uit', link: 'https://linkedin.com/in/thanhlam-uit' },
-      { label: 'Địa chỉ', value: 'Dĩ An, Bình Dương', link: '' }
+      { label: 'SĐT', value: '0901 234 567', link: 'tel:0901234567' },
+      { label: 'Email', value: 'candidate.demo@email.com', link: 'mailto:candidate.demo@email.com' },
+      { label: 'Ngày sinh', value: '01/01/2000', link: '' },
+      { label: 'Portfolio', value: 'candidate-demo.github.io', link: 'https://candidate-demo.github.io' },
+      { label: 'GitHub', value: 'github.com/candidate-demo', link: 'https://github.com/candidate-demo' },
+      { label: 'LinkedIn', value: 'linkedin.com/in/candidate-demo', link: 'https://linkedin.com/in/candidate-demo' },
+      { label: 'Địa chỉ', value: 'TP. Hồ Chí Minh, Việt Nam', link: '' }
     ]
   },
   experience: [
     {
-      company: 'FSI Technology Joint Stock Company',
-      date: 'Mar 2026 – Jun 2026',
-      role: 'Network & Security Engineer Intern',
-      location: '26/22 Street No. 03, Do Thanh Residential Area, Ban Co Ward, Ho Chi Minh City',
+      company: 'Enterprise Network & Security Solutions Corp',
+      date: 'Jan 2025 – Present',
+      role: 'Network & Security Engineer',
+      location: 'Ho Chi Minh City, Vietnam',
       bullets: [
-        'Deployed and validated <strong>F-DDH BOX</strong> security appliance across lab and production environments — traffic simulation, alert verification, firmware coordination, and presales support.',
-        'Researched VPN evasion techniques (<strong>Tailscale, Cloudflare WARP, WireGuard</strong>) to assess NGFW detection gaps; produced comparative analysis for enterprise security advisory.',
-        'Supported Cisco network initiatives: switch upgrade research, StackWise stacking, and <strong>SD-WAN evaluation on Cisco dCloud</strong>; assisted with on-site infrastructure deployment and fiber troubleshooting.',
-        'Deployed internal attendance web app on local server — <strong>NAT port forwarding</strong>, custom domain setup, functional testing, and basic security assessment.'
+        'Deployed and validated enterprise <strong>NGFW security appliances</strong> across lab and production environments — traffic simulation, alert verification, and firmware coordination.',
+        'Researched VPN evasion techniques (<strong>Tailscale, Cloudflare WARP, WireGuard</strong>) to assess firewall detection gaps; produced security advisory reports.',
+        'Supported Cisco network initiatives: switch upgrades, StackWise stacking, and <strong>SD-WAN evaluation</strong>; assisted with infrastructure deployment.'
       ]
     }
   ],
   projects: [
     {
-      name: 'HA Firewall & AI-driven Security Monitoring',
-      subtitle: 'Graduation Thesis',
-      date: 'Jan – May 2026',
-      bullets: [
-        'Deployed <strong>Active-Passive OPNsense cluster</strong> (CARP/pfsync) with HAProxy SSL offloading and <strong>ModSecurity WAF</strong> (OWASP CRS); <strong>2.8s failover (&lt;5s target)</strong>, zero-session-drop with pfsync, and only <strong>0.71%</strong> sync overhead.',
-        'Executed WAF validation with Nikto scan: <strong>12,796 alerts</strong>, DR 100% / FPR 0% on the baseline payload set; conducted payload-level analysis to quantify security vs. false-positive trade-offs.',
-        'Built a <strong>Wazuh SIEM</strong> pipeline and trained Random Forest / Logistic Regression on a custom attack dataset (DVWA + Kali Linux): average detection time <strong>1.80s</strong>, RF AUC <strong>1.000</strong> (lab), LR AUC <strong>0.981</strong>.'
-      ],
-      tags: ['OPNsense', 'CARP/pfsync', 'HAProxy', 'ModSecurity', 'OWASP CRS', 'Wazuh SIEM', 'Random Forest', 'Python', 'VMware']
-    },
-    {
-      name: 'Cisco SD-WAN Hospital Network',
-      subtitle: 'Cisco dCloud Lab',
-      date: 'Apr 2026',
-      bullets: [
-        'Architected a 3-site <strong>Hub-and-Spoke SD-WAN overlay</strong> on Cisco dCloud CML (2× C8000v); enforced <strong>IPsec AES-256-GCM across both transports (MPLS + biz-internet)</strong> — guaranteeing patient data is never transmitted in plaintext, even during transport failover.',
-        'Implemented <strong>least-privilege traffic segmentation</strong> via AAR policy: pinned critical medical traffic (Oracle, MS-SQL) exclusively to MPLS, fully isolated from the internet-bound path; verified failover exposes no sensitive traffic through vManage Events Log — <strong>~3 min convergence, zero manual intervention</strong>.'
-      ],
-      tags: ['Cisco CML', 'Catalyst SD-WAN 20.18', 'vManage', 'C8000v', 'AAR Policy', 'IPsec', 'BFD', 'Hub-and-Spoke']
-    },
-    {
-      name: 'AI Shield Firewall — LLM Traffic Inspection Proxy',
-      subtitle: 'Personal Project',
+      name: 'HA Firewall & AI-driven Security Monitoring System',
+      subtitle: 'Capstone Project',
       date: '2025 – 2026',
       bullets: [
-        'Built a <strong>5-layer bilingual (EN+VI) LLM security proxy</strong> on AWS (FastAPI, Docker) enforcing DLP at enterprise AI API perimeters: Regex → Presidio NLP + <strong>Vietnamese PII recognizers (CCCD, tax code, license plate)</strong> → Prompt Injection detection → per-org Policy Engine → Output Inspection; <strong>25/25 unit tests passed</strong>, &lt;15ms proxy overhead, IAM Role credentials + DynamoDB audit logging.'
+        'Deployed <strong>Active-Passive OPNsense cluster</strong> (CARP/pfsync) with HAProxy SSL offloading and <strong>ModSecurity WAF</strong>; achieved <strong>2.8s failover</strong>, zero-session-drop.',
+        'Built a <strong>Wazuh SIEM</strong> threat monitoring pipeline and trained Random Forest detection models on custom attack datasets with <strong>98.1% accuracy</strong>.'
       ],
-      tags: ['Python', 'FastAPI', 'AWS EC2', 'Docker', 'Presidio NLP', 'Prompt Injection', 'IAM Role', 'DynamoDB']
+      tags: ['OPNsense', 'CARP/pfsync', 'HAProxy', 'ModSecurity', 'Wazuh SIEM', 'Python', 'VMware']
     },
     {
-      name: 'AutoCTI — Autonomous Cyber Threat Intelligence Agent',
-      subtitle: 'Personal Project',
-      date: '2025 – 2026',
+      name: 'Enterprise Cisco SD-WAN Infrastructure',
+      subtitle: 'Lab Simulation',
+      date: '2025',
       bullets: [
-        'Built a <strong>24/7 automated SOC threat-intelligence pipeline</strong> on AWS Free Tier (~$0/month): <strong>LangGraph ReAct Agent</strong> + Gemini 2.5 Flash + Tavily real-time search for autonomous threat triage and Telegram alerting; IAM Role credentials, DynamoDB conversation memory, and production-grade reliability achieving <strong>~80% RAM reduction</strong> over prior Playwright-based architecture.'
+        'Architected a 3-site <strong>Hub-and-Spoke SD-WAN overlay</strong> on Cisco CML; enforced <strong>IPsec AES-256-GCM encryption</strong> across dual transports.',
+        'Implemented traffic segmentation via AAR policy pinning critical medical traffic to MPLS with zero manual intervention during failover.'
       ],
-      tags: ['AWS', 'SQS', 'LangGraph', 'Python', 'Docker', 'Gemini AI', 'Telegram Bot API']
+      tags: ['Cisco CML', 'SD-WAN', 'vManage', 'IPsec', 'BFD', 'AAR Policy']
     }
   ],
   certifications: [
     {
-      name: 'Networking Devices & Initial Configuration',
-      issuer: 'Cisco NetAcad',
-      date: '2026',
-      link: 'https://www.credly.com/badges/37e3e425-f4f6-408a-b053-b8c94ce936a6/public_url'
+      name: 'Cisco Certified Network Associate (CCNA)',
+      issuer: 'Cisco',
+      date: '2025',
+      link: ''
     },
     {
-      name: 'Linux Essentials',
-      issuer: 'Cisco NetAcad',
-      date: '2026',
-      link: 'https://www.credly.com/badges/40b398d3-f95f-40c6-a2c8-242a715b76c9/public_url'
+      name: 'AWS Certified Solutions Architect – Associate',
+      issuer: 'Amazon Web Services',
+      date: '2025',
+      link: ''
     }
   ],
   education: [
     {
-      school: 'University of Information Technology (UIT – VNU-HCM)',
-      degree: 'B.Sc. in Computer Networks and Data Communications',
-      details: 'GPA 3.09 / 4.0 · 2022 – 2026'
+      school: 'University of Information Technology (UIT)',
+      degree: 'B.Sc. in Computer Networks & Data Communications',
+      details: 'GPA 3.2 / 4.0 · 2022 – 2026'
     }
   ],
   skills: [
@@ -120,15 +100,10 @@ const defaultCvData = {
         { name: 'TCP/IP', primary: true },
         { name: 'Routing/Switching', primary: true },
         { name: 'SD-WAN', primary: true },
-        { name: 'High Availability', primary: true },
         { name: 'Cisco IOS', primary: false },
-        { name: 'OSPF', primary: false },
-        { name: 'BGP', primary: false },
+        { name: 'OSPF/BGP', primary: false },
         { name: 'VLAN/STP', primary: false },
-        { name: 'ACL/NAT', primary: false },
-        { name: 'BFD', primary: false },
-        { name: 'CARP/pfsync', primary: false },
-        { name: 'IPv6', primary: false }
+        { name: 'IPsec VPN', primary: false }
       ]
     },
     {
@@ -136,40 +111,24 @@ const defaultCvData = {
       items: [
         { name: 'OPNsense', primary: true },
         { name: 'Wazuh SIEM', primary: true },
-        { name: 'AI Security', primary: true },
         { name: 'ModSecurity WAF', primary: false },
         { name: 'Suricata IDS/IPS', primary: false },
-        { name: 'HAProxy', primary: false },
-        { name: 'Nmap', primary: false },
-        { name: 'Zabbix', primary: false }
+        { name: 'Wireshark', primary: false }
       ]
     },
     {
-      category: 'Cloud & Infra',
+      category: 'Cloud & System',
       items: [
         { name: 'AWS', primary: true },
         { name: 'Docker', primary: true },
-        { name: 'Linux', primary: false },
-        { name: 'VMware', primary: false },
-        { name: 'Cisco CML', primary: false }
-      ]
-    },
-    {
-      category: 'Dev & Tools',
-      items: [
-        { name: 'Python', primary: true },
-        { name: 'C++', primary: true },
-        { name: 'FastAPI', primary: true },
-        { name: 'Git', primary: true },
-        { name: 'REST API', primary: false },
-        { name: 'Shell Script', primary: false },
-        { name: 'Wireshark', primary: false }
+        { name: 'Linux/Bash', primary: false },
+        { name: 'Python', primary: true }
       ]
     }
   ],
   languages: [
     { name: 'Vietnamese', level: 'Native' },
-    { name: 'English', level: 'Technical reading' }
+    { name: 'English', level: 'Technical Professional' }
   ],
   customSections: []
 };
