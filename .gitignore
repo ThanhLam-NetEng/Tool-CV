@@ -1,0 +1,13 @@
+# OS generated files
+.DS_Store
+.DS_Store?
+ehthumbs.db
+Thumbs.db
+*.swp
+*.tmp
+
+# Editor directories
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace

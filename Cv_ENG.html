@@ -1,0 +1,690 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>CV — Phạm Thanh Lâm</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --a: #0a6e68;
+        --al: #e4f2f1;
+        --t: #181818;
+        --m: #4a5563;
+        --m2: #8a939e;
+        --b: #dde1e6;
+        --sb: #f7f9fa;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      html,
+      body {
+        background: #c0c0c0;
+        font-family: "DM Sans", sans-serif;
+        font-size: 9.8pt;
+        color: var(--t);
+        line-height: 1.48;
+      }
+      a {
+        color: var(--m);
+        text-decoration: none;
+      }
+      .page {
+        width: 210mm;
+        min-height: 297mm;
+        background: #fff;
+        margin: 16px auto;
+        box-shadow: 0 4px 32px rgba(0, 0, 0, 0.2);
+        display: grid;
+        grid-template-columns: 1fr 56mm;
+        grid-template-rows: auto 1fr;
+      }
+      .hd {
+        grid-column: 1/-1;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 0.8rem;
+        align-items: start;
+        padding: 8mm 10mm 6mm 10mm;
+        border-bottom: 2.5px solid var(--a);
+      }
+      .hd-name {
+        font-size: 22pt;
+        font-weight: 600;
+        letter-spacing: -0.03em;
+        line-height: 1;
+        margin-bottom: 0.18rem;
+      }
+      .hd-role {
+        font-size: 9pt;
+        font-weight: 500;
+        color: var(--a);
+        margin-bottom: 0.4rem;
+      }
+      .hd-sum {
+        font-size: 8.4pt;
+        color: var(--m);
+        max-width: 360px;
+        line-height: 1.6;
+      }
+      .hd-ct {
+        display: flex;
+        flex-direction: column;
+        gap: 0.22rem;
+        align-items: flex-end;
+      }
+      .ci {
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
+        font-size: 7.8pt;
+        color: var(--m);
+        font-family: "DM Mono", monospace;
+        white-space: nowrap;
+      }
+      .dot {
+        width: 4px;
+        height: 4px;
+        border-radius: 50%;
+        background: var(--a);
+        flex-shrink: 0;
+      }
+      .main {
+        padding: 6mm 7mm 7mm 10mm;
+        min-width: 0;
+      }
+      .side {
+        background: var(--sb);
+        border-left: 1px solid var(--b);
+        padding: 6mm 5mm 7mm 6mm;
+        min-width: 0;
+      }
+      .sec {
+        margin-bottom: 0.72rem;
+      }
+      .sec:last-child {
+        margin-bottom: 0;
+      }
+      .sec-t {
+        font-size: 6.5pt;
+        font-weight: 600;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--a);
+        margin-bottom: 0.4rem;
+        padding-bottom: 0.18rem;
+        border-bottom: 1px solid var(--b);
+      }
+      .en {
+        margin-bottom: 0.55rem;
+      }
+      .en:last-child {
+        margin-bottom: 0;
+      }
+      .en-hd {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 0.3rem;
+        margin-bottom: 0.05rem;
+      }
+      .en-t {
+        font-size: 9.4pt;
+        font-weight: 600;
+        color: var(--t);
+        line-height: 1.2;
+      }
+      .en-tn {
+        font-weight: 400;
+        color: var(--m2);
+        font-size: 8.2pt;
+      }
+      .en-p {
+        font-family: "DM Mono", monospace;
+        font-size: 7pt;
+        color: var(--m2);
+        white-space: nowrap;
+        flex-shrink: 0;
+      }
+      .en-r {
+        font-size: 8.2pt;
+        color: var(--a);
+        font-weight: 500;
+        margin-bottom: 0.2rem;
+      }
+      .en-l {
+        font-size: 7.5pt;
+        color: var(--m2);
+        margin-bottom: 0.22rem;
+      }
+      ul.bl {
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 0.08rem;
+        padding-left: 0.75rem;
+      }
+      ul.bl li {
+        font-size: 8.2pt;
+        color: var(--m);
+        line-height: 1.5;
+        position: relative;
+      }
+      ul.bl li::before {
+        content: "▸";
+        position: absolute;
+        left: -0.7rem;
+        color: var(--a);
+        font-size: 6pt;
+        top: 0.18rem;
+      }
+      ul.bl li strong {
+        color: var(--t);
+        font-weight: 500;
+      }
+      .tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.18rem;
+        margin-top: 0.2rem;
+      }
+      .tag {
+        font-family: "DM Mono", monospace;
+        font-size: 6.3pt;
+        color: var(--a);
+        background: var(--al);
+        padding: 0.08rem 0.4rem;
+        border-radius: 3px;
+      }
+      .cert {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.3rem;
+        margin-bottom: 0.2rem;
+        flex-wrap: wrap;
+      }
+      .cert:last-child {
+        margin-bottom: 0;
+      }
+      .cn {
+        font-size: 8.2pt;
+        color: var(--t);
+        font-weight: 500;
+      }
+      .ci2 {
+        font-size: 7.3pt;
+        color: var(--m);
+      }
+      .cp {
+        font-family: "DM Mono", monospace;
+        font-size: 6.5pt;
+        color: var(--a);
+        background: var(--al);
+        padding: 0.08rem 0.35rem;
+        border-radius: 3px;
+        white-space: nowrap;
+      }
+      .edu-s {
+        font-size: 8pt;
+        font-weight: 600;
+        color: var(--t);
+        line-height: 1.3;
+        margin-bottom: 0.15rem;
+      }
+      .edu-m {
+        font-size: 7.3pt;
+        color: var(--m);
+        line-height: 1.38;
+        margin-bottom: 0.12rem;
+      }
+      .edu-g {
+        font-family: "DM Mono", monospace;
+        font-size: 7pt;
+        color: var(--a);
+      }
+      .sb {
+        margin-bottom: 0.4rem;
+      }
+      .sb:last-child {
+        margin-bottom: 0;
+      }
+      .sb-t {
+        font-size: 6.8pt;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--a);
+        background: var(--al);
+        padding: 0.12rem 0.38rem;
+        border-radius: 3px;
+        display: inline-block;
+        margin-bottom: 0.22rem;
+      }
+      .pills {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.16rem;
+      }
+      .pl {
+        font-size: 7.3pt;
+        color: var(--t);
+        background: #fff;
+        border: 1px solid var(--b);
+        padding: 0.1rem 0.38rem;
+        border-radius: 4px;
+        line-height: 1.38;
+      }
+      .pl.p {
+        border-color: var(--a);
+        color: var(--a);
+        font-weight: 500;
+      }
+      .div {
+        height: 1px;
+        background: var(--b);
+        margin: 0.4rem 0;
+      }
+      .lang {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 0.3rem;
+        font-size: 7.6pt;
+        margin-bottom: 0.16rem;
+      }
+      .ln {
+        color: var(--t);
+        font-weight: 500;
+      }
+      .ll {
+        color: var(--m2);
+        font-size: 7pt;
+        text-align: right;
+        white-space: nowrap;
+      }
+      .tier-lbl {
+        font-size: 5.6pt;
+        font-weight: 600;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--m2);
+        margin-bottom: 0.28rem;
+        margin-top: 0.05rem;
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+      }
+      .tier-lbl::after {
+        content: "";
+        flex: 1;
+        height: 1px;
+        background: var(--b);
+      }
+      @media print {
+        html,
+        body {
+          background: #fff;
+        }
+        .page {
+          margin: 0;
+          box-shadow: none;
+        }
+        .sec { margin-bottom: 0.32rem; }
+        .en  { margin-bottom: 0.22rem; }
+        .hd  { padding: 5mm 10mm 4mm 10mm; }
+        .main { padding: 3.5mm 6mm 5mm 9mm; }
+        .side { padding: 3.5mm 4mm 5mm 5mm; }
+        .tags { margin-top: 0.08rem; gap: 0.1rem; }
+        .sb { margin-bottom: 0.28rem; }
+        ul.bl { gap: 0.04rem; }
+        .div { margin: 0.28rem 0; }
+        .cert { margin-bottom: 0.14rem; }
+      }
+      @page {
+        size: A4;
+        margin: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <!-- HEADER -->
+      <header class="hd">
+        <div>
+          <div class="hd-name">Phạm Thanh Lâm</div>
+          <div class="hd-role">
+            Network Engineer · Computer Networks &amp; Data Communications
+          </div>
+          <!-- SUMMARY: no tech list, shows mindset + target -->
+          <p class="hd-sum">
+            Network Engineer focused on designing and validating complete
+            solutions across network, security, and cloud environments.
+            Experienced in building real-world systems end-to-end. Seeking
+            Network/Security Engineering roles to contribute to practical
+            system design and operations.
+          </p>
+        </div>
+        <div class="hd-ct">
+          <div class="ci"><span class="dot"></span>0868 745 540</div>
+          <div class="ci">
+            <span class="dot"></span
+            ><a href="mailto:phamthanhlam.work@gmail.com"
+              >phamthanhlam.work@gmail.com</a
+            >
+          </div>
+          <div class="ci">
+            <span class="dot"></span
+            ><a href="https://thanhlam-neteng.github.io/Portfolio/"
+              >thanhlam-neteng.github.io/Portfolio</a
+            >
+          </div>
+          <div class="ci">
+            <span class="dot"></span
+            ><a href="https://github.com/ThanhLam-NetEng"
+              >github.com/ThanhLam-NetEng</a
+            >
+          </div>
+          <div class="ci">
+            <span class="dot"></span
+            ><a href="https://linkedin.com/in/thanhlam-uit"
+              >linkedin.com/in/thanhlam-uit</a
+            >
+          </div>
+          <div class="ci"><span class="dot"></span>Di An, Binh Duong</div>
+        </div>
+      </header>
+
+      <!-- MAIN -->
+      <div class="main">
+        <!-- EXPERIENCE -->
+        <div class="sec">
+          <div class="sec-t">Experience</div>
+          <div class="en">
+            <div class="en-hd">
+              <div class="en-t">FSI Technology Joint Stock Company</div>
+              <div class="en-p">Mar 2026 – Jun 2026</div>
+            </div>
+            <div class="en-r">Network &amp; Security Engineer Intern</div>
+            <div class="en-l">
+              26/22 Street No. 03, Do Thanh Residential Area, Ban Co Ward,
+              Ho Chi Minh City
+            </div>
+            <ul class="bl">
+              <li>
+                Deployed and validated <strong>F-DDH BOX</strong> security appliance across lab and production environments — traffic simulation, alert verification, firmware coordination, and presales support.
+              </li>
+              <li>
+                Researched VPN evasion techniques (<strong>Tailscale, Cloudflare WARP, WireGuard</strong>) to assess NGFW detection gaps; produced comparative analysis for enterprise security advisory.
+              </li>
+              <li>
+                Supported Cisco network initiatives: switch upgrade research, StackWise stacking, and <strong>SD-WAN evaluation on Cisco dCloud</strong>; assisted with on-site infrastructure deployment and fiber troubleshooting.
+              </li>
+              <li>
+                Deployed internal attendance web app on local server — <strong>NAT port forwarding</strong>, custom domain setup, functional testing, and basic security assessment.
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- PROJECTS -->
+        <div class="sec">
+          <div class="sec-t">Projects</div>
+
+          <!-- Thesis -->
+          <div class="en">
+            <div class="en-hd">
+              <div class="en-t">
+                HA Firewall &amp; AI-driven Security Monitoring
+                <span class="en-tn">— Graduation Thesis</span>
+              </div>
+              <div class="en-p">Jan – May 2026</div>
+            </div>
+            <ul class="bl">
+              <li>
+                Deployed
+                <strong>Active-Passive OPNsense cluster</strong> (CARP/pfsync)
+                with HAProxy SSL offloading and
+                <strong>ModSecurity WAF</strong> (OWASP CRS);
+                <strong>2.8s failover (&lt;5s target)</strong>, zero-session-drop
+                with pfsync, and only <strong>0.71%</strong> sync overhead.
+              </li>
+              <li>
+                Executed WAF validation with Nikto scan:
+                <strong>12,796 alerts</strong>, DR 100% / FPR 0% on the baseline
+                payload set; conducted payload-level analysis to quantify
+                security vs. false-positive trade-offs.
+              </li>
+              <li>
+                Built a <strong>Wazuh SIEM</strong> pipeline and trained Random
+                Forest / Logistic Regression on a custom attack dataset
+                (DVWA + Kali Linux): average detection time
+                <strong>1.80s</strong>, RF AUC <strong>1.000</strong> (lab), LR
+                AUC <strong>0.981</strong>.
+              </li>
+            </ul>
+            <div class="tags">
+              <span class="tag">OPNsense</span
+              ><span class="tag">CARP/pfsync</span
+              ><span class="tag">HAProxy</span
+              ><span class="tag">ModSecurity</span
+              ><span class="tag">OWASP CRS</span
+              ><span class="tag">Wazuh SIEM</span
+              ><span class="tag">Random Forest</span
+              ><span class="tag">Python</span><span class="tag">VMware</span>
+            </div>
+          </div>
+
+          <!-- SD-WAN -->
+          <div class="en">
+            <div class="en-hd">
+              <div class="en-t">
+                Cisco SD-WAN Hospital Network
+                <span class="en-tn">— Cisco dCloud Lab</span>
+              </div>
+              <div class="en-p">Apr 2026</div>
+            </div>
+            <ul class="bl">
+              <li>
+                Architected a 3-site
+                <strong>Hub-and-Spoke SD-WAN overlay</strong> on Cisco dCloud
+                CML (2× C8000v); enforced
+                <strong
+                  >IPsec AES-256-GCM across both transports (MPLS +
+                  biz-internet)</strong
+                >
+                — guaranteeing patient data is never transmitted in plaintext,
+                even during transport failover.
+              </li>
+              <li>
+                Implemented
+                <strong>least-privilege traffic segmentation</strong>
+                via AAR policy: pinned critical medical traffic (Oracle, MS-SQL)
+                exclusively to MPLS, fully isolated from the internet-bound
+                path; verified failover exposes no sensitive traffic through
+                vManage Events Log —
+                <strong>~3 min convergence, zero manual intervention</strong>.
+              </li>
+            </ul>
+            <div class="tags">
+              <span class="tag">Cisco CML</span
+              ><span class="tag">Catalyst SD-WAN 20.18</span
+              ><span class="tag">vManage</span><span class="tag">C8000v</span
+              ><span class="tag">AAR Policy</span><span class="tag">IPsec</span
+              ><span class="tag">BFD</span
+              ><span class="tag">Hub-and-Spoke</span>
+            </div>
+          </div>
+
+          <!-- AI Shield -->
+          <div class="en">
+            <div class="en-hd">
+              <div class="en-t">
+                AI Shield Firewall — LLM Traffic Inspection Proxy
+                <span class="en-tn">— Personal Project</span>
+              </div>
+              <div class="en-p">2025 – 2026</div>
+            </div>
+            <ul class="bl">
+              <li>
+                Built a <strong>5-layer bilingual (EN+VI) LLM security proxy</strong> on AWS
+                (FastAPI, Docker) enforcing DLP at enterprise AI API perimeters: Regex →
+                Presidio NLP + <strong>Vietnamese PII recognizers (CCCD, tax code, license plate)</strong>
+                → Prompt Injection detection → per-org Policy Engine → Output Inspection;
+                <strong>25/25 unit tests passed</strong>, &lt;15ms proxy overhead,
+                IAM Role credentials + DynamoDB audit logging.
+              </li>
+            </ul>
+            <div class="tags">
+              <span class="tag">Python</span><span class="tag">FastAPI</span
+              ><span class="tag">AWS EC2</span><span class="tag">Docker</span
+              ><span class="tag">Presidio NLP</span
+              ><span class="tag">Prompt Injection</span
+              ><span class="tag">IAM Role</span
+              ><span class="tag">DynamoDB</span>
+            </div>
+          </div>
+
+          <!-- AutoCTI -->
+          <div class="en">
+            <div class="en-hd">
+              <div class="en-t">
+                AutoCTI — Autonomous Cyber Threat Intelligence Agent
+                <span class="en-tn">— Personal Project</span>
+              </div>
+              <div class="en-p">2025 – 2026</div>
+            </div>
+            <ul class="bl">
+              <li>
+                Built a <strong>24/7 automated SOC threat-intelligence pipeline</strong>
+                on AWS Free Tier (~$0/month): <strong>LangGraph ReAct Agent</strong> +
+                Gemini 2.5 Flash + Tavily real-time search for autonomous threat triage
+                and Telegram alerting; IAM Role credentials, DynamoDB conversation memory,
+                and production-grade reliability achieving <strong>~80% RAM reduction</strong>
+                over prior Playwright-based architecture.
+              </li>
+            </ul>
+            <div class="tags">
+              <span class="tag">AWS</span><span class="tag">SQS</span
+              ><span class="tag">LangGraph</span><span class="tag">Python</span
+              ><span class="tag">Docker</span><span class="tag">Gemini AI</span
+              ><span class="tag">Telegram Bot API</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- CERTIFICATIONS -->
+        <div class="sec">
+          <div class="sec-t">Certifications</div>
+          <div style="display:flex;flex-direction:column;gap:0.18rem;">
+            <div style="font-size:7.8pt;color:var(--m);display:flex;justify-content:space-between;align-items:baseline;gap:0.5rem;">
+              <a href="https://www.credly.com/badges/37e3e425-f4f6-408a-b053-b8c94ce936a6/public_url" target="_blank" style="color:var(--t);font-weight:500;text-decoration:underline;text-underline-offset:2px;text-decoration-color:var(--b);">Networking Devices &amp; Initial Configuration</a>
+              <span style="font-family:'DM Mono',monospace;font-size:6.5pt;color:var(--m2);white-space:nowrap;">Cisco NetAcad · 2026</span>
+            </div>
+            <div style="font-size:7.8pt;color:var(--m);display:flex;justify-content:space-between;align-items:baseline;gap:0.5rem;">
+              <a href="https://www.credly.com/badges/40b398d3-f95f-40c6-a2c8-242a715b76c9/public_url" target="_blank" style="color:var(--t);font-weight:500;text-decoration:underline;text-underline-offset:2px;text-decoration-color:var(--b);">Linux Essentials</a>
+              <span style="font-family:'DM Mono',monospace;font-size:6.5pt;color:var(--m2);white-space:nowrap;">Cisco NetAcad · 2026</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- /main -->
+
+      <!-- SIDEBAR -->
+      <div class="side">
+        <div class="sec">
+          <div class="sec-t">Education</div>
+          <div class="edu-s">
+            University of Information Technology (UIT – VNU-HCM)
+          </div>
+          <div class="edu-m">
+            B.Sc. in Computer Networks and Data Communications
+          </div>
+          <div class="edu-g">GPA 3.09 / 4.0 · 2022 – 2026</div>
+        </div>
+
+        <div class="div"></div>
+
+        <div class="sec">
+          <div class="sec-t">Skills</div>
+
+          <div class="sb">
+            <div class="sb-t">Networking</div>
+            <div class="pills">
+              <span class="pl p">TCP/IP</span>
+              <span class="pl p">Routing/Switching</span>
+              <span class="pl p">SD-WAN</span>
+              <span class="pl p">High Availability</span>
+              <span class="pl">Cisco IOS</span>
+              <span class="pl">OSPF</span>
+              <span class="pl">BGP</span>
+              <span class="pl">VLAN/STP</span>
+              <span class="pl">ACL/NAT</span>
+              <span class="pl">BFD</span>
+              <span class="pl">CARP/pfsync</span>
+              <span class="pl">IPv6</span>
+            </div>
+          </div>
+
+          <div class="sb">
+            <div class="sb-t">Security</div>
+            <div class="pills">
+              <span class="pl p">OPNsense</span>
+              <span class="pl p">Wazuh SIEM</span>
+              <span class="pl p">AI Security</span>
+              <span class="pl">ModSecurity WAF</span>
+              <span class="pl">Suricata IDS/IPS</span>
+              <span class="pl">HAProxy</span>
+              <span class="pl">Nmap</span>
+              <span class="pl">Zabbix</span>
+            </div>
+          </div>
+
+          <div class="sb">
+            <div class="sb-t">Cloud &amp; Infra</div>
+            <div class="pills">
+              <span class="pl p">AWS</span>
+              <span class="pl p">Docker</span>
+              <span class="pl">Linux</span>
+              <span class="pl">VMware</span>
+              <span class="pl">Cisco CML</span>
+            </div>
+          </div>
+
+          <div class="sb">
+            <div class="sb-t">Dev &amp; Tools</div>
+            <div class="pills">
+              <span class="pl p">Python</span>
+              <span class="pl p">C++</span>
+              <span class="pl p">FastAPI</span>
+              <span class="pl p">Git</span>
+              <span class="pl">REST API</span>
+              <span class="pl">Shell Script</span>
+              <span class="pl">Wireshark</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="div"></div>
+
+        <div class="sec">
+          <div class="sec-t">Languages</div>
+          <div class="lang">
+            <span class="ln">Vietnamese</span><span class="ll">Native</span>
+          </div>
+          <div class="lang">
+            <span class="ln">English</span><span class="ll">Technical reading</span>
+          </div>
+        </div>
+      </div>
+      <!-- /side -->
+    </div>
+  </body>
+</html>

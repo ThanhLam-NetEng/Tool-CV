@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CV — Phạm Thanh Lâm</title>
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&family=Inter:wght@300;400;500;600;700&family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet" />
+  
+  <!-- Application Stylesheet -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- App Header -->
+  <header class="app-header">
+    <div class="brand">
+      <div class="brand-icon">CV</div>
+      <div class="brand-title">
+        <h1>CV Builder & Editor</h1>
+        <p>Tạo & Quản lý nhiều phiên bản CV</p>
+      </div>
+    </div>
+    
+    <!-- Profile Version Selector -->
+    <div class="profile-manager">
+      <select id="profile-select" class="profile-select" title="Chọn phiên bản CV"></select>
+      <button id="btn-rename-profile" class="btn btn-secondary btn-sm" title="Đổi tên phiên bản này">Sửa tên</button>
+      <button id="btn-new-profile" class="btn btn-secondary btn-sm" title="Tạo bản sao mới">+ Nhân bản</button>
+      <button id="btn-delete-profile" class="btn btn-danger btn-sm" title="Xóa phiên bản này">Xóa</button>
+    </div>
+
+    <!-- Actions Panel -->
+    <div style="display: flex; gap: 0.5rem;">
+      <button id="btn-import-json" class="btn btn-secondary" title="Nhập dữ liệu từ file JSON">Nhập JSON</button>
+      <input type="file" id="import-file-input" accept=".json">
+      
+      <button id="btn-export-json" class="btn btn-secondary" title="Xuất dữ liệu CV ra file JSON">Xuất JSON</button>
+      <button id="btn-reset-default" class="btn btn-secondary" title="Đặt lại dữ liệu gốc của phiên bản này">Reset Gốc</button>
+      <button id="btn-export-pdf" class="btn" title="Xuất CV ra file PDF (hoặc phím Ctrl+P)">Xuất PDF</button>
+    </div>
+  </header>
+
+  <!-- App Body Layout -->
+  <div class="app-content">
+    
+    <!-- Left Editor Pane -->
+    <aside class="editor-pane">
+      
+      <!-- Print Notice & Guides -->
+      <div class="print-notice">
+        <strong>💡 Hướng dẫn xuất PDF chuẩn A4:</strong>
+        <ul style="padding-left: 1.2rem; margin-top: 0.25rem;">
+          <li>Chọn nút <strong>Xuất PDF</strong> (hoặc nhấn <strong>Ctrl + P</strong>).</li>
+          <li>Chọn máy in (Destination) là: <strong>Save as PDF</strong> (Lưu dưới dạng PDF).</li>
+          <li>Khổ giấy (Paper size): <strong>A4</strong>.</li>
+          <li>Lề (Margins): <strong>None</strong> (Không có).</li>
+          <li>Bật tùy chọn: <strong>Background graphics</strong> (Đồ họa nền) để hiển thị màu thẻ tag và sidebar.</li>
+        </ul>
+        <div style="margin-top: 0.5rem; padding: 0.4rem 0.6rem; background: rgba(239, 68, 68, 0.15); border: 1px solid var(--app-danger); border-radius: 4px; font-size: 0.75rem; color: #fca5a5; line-height: 1.35;">
+          <strong>⚠️ LƯU Ý BẮT BUỘC ĐỂ BẤM ĐƯỢC LINK TRONG PDF:</strong><br>
+          Tại mục <em>Máy in (Destination)</em>, bạn phải chọn đúng <strong>Save as PDF</strong> (Lưu dưới dạng PDF) của trình duyệt.<br>
+          <em>KHÔNG chọn "Microsoft Print to PDF"</em> vì máy in ảo Windows sẽ chụp lại màn hình thành hình ảnh phẳng và loại bỏ toàn bộ liên kết!
+        </div>
+      </div>
+
+      <!-- Main Form (Dynamically rendered by app.js) -->
+      <form id="editor-form" onsubmit="event.preventDefault();"></form>
+    </aside>
+
+    <!-- Right Live Preview Pane -->
+    <main class="preview-pane">
+      
+      <!-- Preview Pane Toolbar -->
+      <div class="preview-toolbar">
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <span style="font-size: 0.8rem; font-weight: 500; color: var(--app-text-muted);">A4 LIVE PREVIEW</span>
+          <div id="a4-page-status" class="a4-status-badge fit" title="Trạng thái độ dài CV so với 1 trang A4">✓ Đúng 1 trang A4</div>
+          <button id="btn-auto-fit-page" class="btn btn-secondary btn-sm" style="font-size: 0.72rem; padding: 0.2rem 0.5rem;" title="Tự động căn chỉnh cỡ chữ & khoảng cách dồn khít 1 trang A4">⚡ Dồn vừa 1 Trang A4</button>
+        </div>
+        
+        <!-- Zoom controls -->
+        <div class="zoom-controls">
+          <button id="btn-zoom-out" class="btn-icon" title="Thu nhỏ (Zoom Out)">−</button>
+          <span id="zoom-display" class="zoom-display">85%</span>
+          <button id="btn-zoom-in" class="btn-icon" title="Phóng to (Zoom In)">+</button>
+          <button id="btn-zoom-reset" class="btn-icon" title="Cỡ chuẩn (100%)">⟲</button>
+          <button id="btn-zoom-fit" class="btn-icon" style="font-size:0.75rem; padding: 0 0.2rem;" title="Tự động vừa khít">Vừa</button>
+        </div>
+      </div>
+      
+      <!-- Interactive Scaled CV Container -->
+      <div class="preview-area">
+        <div id="preview-scale-wrapper" class="page-wrapper">
+          <!-- The rendered CV page -->
+          <div id="preview-cv" class="page"></div>
+        </div>
+      </div>
+    </main>
+
+  </div>
+
+  <!-- Application Logic -->
+  <script src="app.js"></script>
+</body>
+</html>
