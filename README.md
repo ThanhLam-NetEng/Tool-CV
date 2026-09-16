@@ -5,7 +5,9 @@ Công cụ tạo, quản lý và xuất CV A4 chuyên nghiệp dành cho Kỹ s�
 ![HTML5](https://img.shields.io/badge/HTML5-E34F26?style=for-the-badge&logo=html5&logoColor=white)
 ![CSS3](https://img.shields.io/badge/CSS3-1572B6?style=for-the-badge&logo=css3&logoColor=white)
 ![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)
-![License](https://img.shields.io/badge/License-MIT-green.style=for-the-badge)
+![License](https://img.shields.io/badge/License-MIT-42b883?style=for-the-badge&logo=open-source-initiative&logoColor=white)
+
+🌐 **Live Web Demo:** [https://ThanhLam-NetEng.github.io/Tool-CV/](https://ThanhLam-NetEng.github.io/Tool-CV/)
 
 ---
 
@@ -44,32 +46,20 @@ Công cụ tạo, quản lý và xuất CV A4 chuyên nghiệp dành cho Kỹ s�
 
 ---
 
-## 🚀 Hướng dẫn Chạy cục bộ & Đăng lên GitHub Pages
+## 🚀 Hướng dẫn Chạy cục bộ & Live Web
 
 ### 1. Chạy cục bộ (Local Run)
 Không cần cài đặt Node.js hay build bước nào phức tạp. Chỉ cần mở file `index.html` trực tiếp trên trình duyệt Web (Chrome, Edge, Brave, Firefox):
 ```bash
 # Clone repository
-git clone https://github.com/your-username/your-cv-builder.git
+git clone https://github.com/ThanhLam-NetEng/Tool-CV.git
 
-# Mở index.html trong trình duyệt
+# Mở file index.html trong trình duyệt
 ```
 
-### 2. Đăng tải lên GitHub Pages (Live Demo)
-1. Tạo một repository mới trên GitHub (Ví dụ: `my-cv-builder`).
-2. Push toàn bộ mã nguồn lên repository:
-   ```bash
-   git init
-   git add .
-   git commit -m "Initial commit: Professional CV Builder"
-   git branch -M main
-   git remote add origin https://github.com/your-username/my-cv-builder.git
-   git push -u origin main
-   ```
-3. Trên GitHub, vào mục **Settings** ➔ **Pages**:
-   - Source: chọn **Deploy from a branch**.
-   - Branch: chọn **main** và thư mục `/(root)`.
-   - Bấm **Save**. CV Builder sẽ chạy trực tuyến tại `https://your-username.github.io/my-cv-builder/`.
+### 2. Truy cập Live Demo (GitHub Pages)
+Ứng dụng được tự động tích hợp chạy trực tuyến tại:
+👉 **[https://ThanhLam-NetEng.github.io/Tool-CV/](https://ThanhLam-NetEng.github.io/Tool-CV/)**
 
 ---
 
@@ -77,7 +67,7 @@ git clone https://github.com/your-username/your-cv-builder.git
 
 1. Nhấp nút **Xuất PDF** trên thanh công cụ (hoặc nhấn tổ hợp phím **Ctrl + P**).
 2. Tại cửa sổ in của trình duyệt, chọn các thông số sau:
-   - **Máy in (Destination)**: `Save as PDF` (Lưu dưới dạng PDF) hoặc `Microsoft Print to PDF` (Lưu ý: Để bấm được link, khuyến nghị chọn *Save as PDF* của trình duyệt).
+   - **Máy in (Destination)**: `Save as PDF` (Lưu dưới dạng PDF).
    - **Khổ giấy (Paper size)**: `A4`.
    - **Lề (Margins)**: `None` (Không có).
    - **Tùy chọn khác**: Tích chọn **Background graphics** (Đồ họa nền) để giữ màu thẻ tag và sidebar.
