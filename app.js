@@ -4,6 +4,7 @@ const defaultCvData = {
     template: 'harvard', // Default template: Harvard Standard
     fontFamily: 'auto', // Font Family: 'auto' | 'lora' | 'inter' | 'dm-sans' | 'roboto'
     spacingMode: 'normal', // Spacing mode: 'normal' | 'compact' | 'tight'
+    skillStyle: 'pills', // Skill layout style: 'pills' | 'text' | 'bullets'
     primaryColor: '#0a6e68',
     lightColor: '#e4f2f1',
     textColor: '#181818',
@@ -164,6 +165,7 @@ function migrateData(data) {
   }
   if (!data.theme.fontFamily) data.theme.fontFamily = 'auto';
   if (!data.theme.spacingMode) data.theme.spacingMode = 'normal';
+  if (!data.theme.skillStyle) data.theme.skillStyle = 'pills';
   if (!data.theme.fontSize) data.theme.fontSize = '9.8';
   if (!data.theme.primaryColor) data.theme.primaryColor = '#0a6e68';
   if (!data.theme.lightColor) data.theme.lightColor = '#e4f2f1';
@@ -1299,6 +1301,24 @@ function renderEditor() {
 
   // 7. Skills Section
   const secSkills = createFormSection('Kỹ năng');
+
+  // Skill Display Style selector
+  const grpSkillStyle = document.createElement('div');
+  grpSkillStyle.className = 'form-group mb-3';
+  grpSkillStyle.innerHTML = `
+    <label style="font-weight:600; color:var(--app-text);">Kiểu hiển thị Kỹ năng (Skill Layout Style):</label>
+    <select class="form-control select-skill-style">
+      <option value="pills" ${(!data.theme.skillStyle || data.theme.skillStyle === 'pills') ? 'selected' : ''}>Mẫu 1: Thẻ Tag / Pills (Mặc định — Nổi bật & Hiện đại)</option>
+      <option value="text" ${data.theme.skillStyle === 'text' ? 'selected' : ''}>Mẫu 2: Dạng Liệt kê Chữ (Inline Text — Siêu tiết kiệm diện tích & chuẩn ATS)</option>
+      <option value="bullets" ${data.theme.skillStyle === 'bullets' ? 'selected' : ''}>Mẫu 3: Dạng Gạch đầu dòng (Compact Bullets — Rõ ràng theo hàng)</option>
+    </select>
+  `;
+  grpSkillStyle.querySelector('.select-skill-style').addEventListener('change', (e) => {
+    data.theme.skillStyle = e.target.value;
+    updateDataAndPreview();
+  });
+  secSkills.appendChild(grpSkillStyle);
+
   const skillsContainer = document.createElement('div');
   skillsContainer.className = 'skills-editor-container';
 
@@ -1957,36 +1977,82 @@ function updatePreview() {
     `;
   }
 
-  // Skills HTML (Sidebar) - Seamless support for both object & string arrays
+  // Skills HTML (Sidebar) - Support for Pills, Inline Text List, and Bullet List
   let skillsHtml = '';
+  const skillStyle = t.skillStyle || 'pills';
   if (data.skills && data.skills.length > 0) {
     let skillCatsHtml = '';
     data.skills.forEach(skillCat => {
       if (skillCat.items && skillCat.items.length > 0) {
-        const pillsHtml = skillCat.items.map(s => {
-          let name = '';
-          let isPrimary = false;
-          if (typeof s === 'string') {
-            if (s.endsWith('*')) {
-              name = s.slice(0, -1).trim();
-              isPrimary = true;
-            } else {
-              name = s.trim();
+        if (skillStyle === 'text') {
+          // Compact Inline Text List format (Networking: TCP/IP, Routing/Switching...)
+          const textItemsHtml = skillCat.items.map(s => {
+            let name = '';
+            let isPrimary = false;
+            if (typeof s === 'string') {
+              if (s.endsWith('*')) { name = s.slice(0, -1).trim(); isPrimary = true; }
+              else { name = s.trim(); }
+            } else if (s && typeof s === 'object') {
+              name = s.name || '';
+              isPrimary = !!s.primary;
             }
-          } else if (s && typeof s === 'object') {
-            name = s.name || '';
-            isPrimary = !!s.primary;
-          }
-          if (!name) return '';
-          return `<span class="pl ${isPrimary ? 'p' : ''}">${name}</span>`;
-        }).join('');
+            if (!name) return '';
+            return isPrimary ? `<strong>${escapeHtml(name)}</strong>` : escapeHtml(name);
+          }).filter(Boolean).join(', ');
 
-        skillCatsHtml += `
-          <div class="sb">
-            <div class="sb-t">${skillCat.category}</div>
-            <div class="pills">${pillsHtml}</div>
-          </div>
-        `;
+          skillCatsHtml += `
+            <div class="sb sb-text-style" style="margin-bottom: 0.35rem; font-size: 0.8em; line-height: 1.45; color: var(--m);">
+              <span style="font-weight: 600; color: var(--t); margin-right: 0.25rem;">${escapeHtml(skillCat.category)}:</span>
+              <span>${textItemsHtml}</span>
+            </div>
+          `;
+        } else if (skillStyle === 'bullets') {
+          // Bullet list format
+          const textItemsHtml = skillCat.items.map(s => {
+            let name = '';
+            let isPrimary = false;
+            if (typeof s === 'string') {
+              if (s.endsWith('*')) { name = s.slice(0, -1).trim(); isPrimary = true; }
+              else { name = s.trim(); }
+            } else if (s && typeof s === 'object') {
+              name = s.name || '';
+              isPrimary = !!s.primary;
+            }
+            if (!name) return '';
+            return isPrimary ? `<strong>${escapeHtml(name)}</strong>` : escapeHtml(name);
+          }).filter(Boolean).join(', ');
+
+          skillCatsHtml += `
+            <div class="sb sb-bullet-style" style="margin-bottom: 0.4rem;">
+              <div class="sb-t" style="margin-bottom: 0.15rem;">${escapeHtml(skillCat.category)}</div>
+              <ul class="bl">
+                <li style="font-size: 0.8em; color: var(--m);">${textItemsHtml}</li>
+              </ul>
+            </div>
+          `;
+        } else {
+          // Default: Pill Badges
+          const pillsHtml = skillCat.items.map(s => {
+            let name = '';
+            let isPrimary = false;
+            if (typeof s === 'string') {
+              if (s.endsWith('*')) { name = s.slice(0, -1).trim(); isPrimary = true; }
+              else { name = s.trim(); }
+            } else if (s && typeof s === 'object') {
+              name = s.name || '';
+              isPrimary = !!s.primary;
+            }
+            if (!name) return '';
+            return `<span class="pl ${isPrimary ? 'p' : ''}">${escapeHtml(name)}</span>`;
+          }).join('');
+
+          skillCatsHtml += `
+            <div class="sb">
+              <div class="sb-t">${escapeHtml(skillCat.category)}</div>
+              <div class="pills">${pillsHtml}</div>
+            </div>
+          `;
+        }
       }
     });
     skillsHtml = `
