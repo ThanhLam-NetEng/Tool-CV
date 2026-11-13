@@ -35,6 +35,7 @@
 
     <!-- Actions Panel -->
     <div style="display: flex; gap: 0.5rem;">
+      <button id="btn-tracker" class="btn btn-secondary" title="Bảng theo dõi các CV đã gửi / đang ứng tuyển">📋 Theo dõi</button>
       <button id="btn-import-json" class="btn btn-secondary" title="Nhập dữ liệu từ file JSON">Nhập JSON</button>
       <input type="file" id="import-file-input" accept=".json">
       
@@ -103,7 +104,31 @@
 
   </div>
 
+  <!-- Application tracker overlay (opened from the "Theo dõi" button) -->
+  <div id="tracker-overlay" class="tracker-overlay" hidden>
+    <div class="tracker-panel" role="dialog" aria-modal="true" aria-labelledby="tracker-title">
+      <div class="tracker-head">
+        <h2 id="tracker-title">📋 Theo dõi ứng tuyển</h2>
+        <div class="tracker-head-actions">
+          <button id="btn-tracker-csv" class="btn btn-secondary btn-sm" title="Tải bảng này về dạng CSV (mở bằng Excel)">Xuất CSV</button>
+          <button id="btn-tracker-close" class="btn btn-secondary btn-sm" title="Đóng (Esc)">Đóng ✕</button>
+        </div>
+      </div>
+      <div id="tracker-summary" class="tracker-summary"></div>
+      <div class="tracker-table-wrap">
+        <table class="tracker-table">
+          <thead>
+            <tr><th>Phiên bản CV</th><th>Công ty</th><th>Vị trí</th><th>Trạng thái</th><th>Ngày gửi</th><th>JD</th></tr>
+          </thead>
+          <tbody id="tracker-body"></tbody>
+        </table>
+      </div>
+      <p class="helper-text">Bấm vào một dòng để mở phiên bản CV đó. Thông tin điền ở mục "Ứng tuyển &amp; Khớp JD" của từng phiên bản. Dữ liệu chỉ lưu trên trình duyệt này.</p>
+    </div>
+  </div>
+
   <!-- Application Logic -->
+  <script src="jd-match.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

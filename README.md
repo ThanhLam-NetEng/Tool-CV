@@ -44,6 +44,27 @@ Công cụ tạo, quản lý và xuất CV A4 chuyên nghiệp dành cho Kỹ s�
 - Lưu trữ và chuyển đổi giữa nhiều phiên bản CV (CV Tiếng Anh, CV Tiếng Việt, CV Networking, CV Cybersecurity...) ngay trong `localStorage`.
 - Đổi tên, nhân bản, xóa phiên bản và Nhập/Xuất file dữ liệu `JSON`.
 
+### 🎯 8. Khớp CV với JD (ATS Keyword Matcher)
+- Dán nội dung JD vào mục **"Ứng tuyển & Khớp JD"** → bấm **Phân tích** để xem % độ khớp, các từ khóa kỹ thuật **JD yêu cầu mà CV còn thiếu** (xếp theo mức được nhắc đến) và những từ khóa **đã có**.
+- Hiểu nhiều cách gọi của cùng một thứ (VD: `Wazuh`/`Splunk` → SIEM, `Suricata` → IDS/IPS) và một số thuật ngữ tiếng Việt (tường lửa, giám sát, ứng phó sự cố...).
+- Kết quả **tự cập nhật** khi bạn sửa CV. Chạy hoàn toàn trên trình duyệt, nội dung JD không gửi đi đâu.
+- ⚠️ Chỉ bổ sung những kỹ năng bạn thật sự có. Từ khóa thiếu chỉ là gợi ý để rà lại.
+
+### 📋 9. Theo dõi ứng tuyển (Application Tracker)
+- Mỗi phiên bản CV ghi được: công ty, vị trí, trạng thái (Chưa gửi / Đã gửi / Phỏng vấn / Có offer / Bị từ chối / Không phản hồi), ngày gửi, link tin tuyển dụng, ghi chú. **Không in ra CV/PDF.**
+- Nút **📋 Theo dõi** mở bảng tổng hợp mọi phiên bản; bấm một dòng để mở nhanh phiên bản đó. Có nút **Xuất CSV** (mở bằng Excel, đúng tiếng Việt).
+- Tên phiên bản trong danh sách chọn hiển thị kèm công ty và trạng thái.
+
+---
+
+## 🧱 Cấu trúc mã nguồn
+| File | Vai trò |
+|---|---|
+| `index.html` | Khung giao diện (form bên trái, xem trước A4 bên phải, bảng theo dõi) |
+| `app.js` | Logic chính: dữ liệu, form soạn, xem trước, profile, tracker |
+| `jd-match.js` | Bộ phân tích từ khóa JD ↔ CV (hàm thuần, không phụ thuộc DOM) |
+| `style.css` | Giao diện ứng dụng và các mẫu CV |
+
 ---
 
 ## 🚀 Hướng dẫn Chạy cục bộ & Live Web

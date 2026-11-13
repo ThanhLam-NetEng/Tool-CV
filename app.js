@@ -131,8 +131,36 @@ const defaultCvData = {
     { name: 'Vietnamese', level: 'Native' },
     { name: 'English', level: 'Technical Professional' }
   ],
-  customSections: []
+  customSections: [],
+  // Job-application tracking for this CV version (never printed on the CV)
+  application: {
+    company: '',
+    position: '',
+    status: 'draft',
+    sentDate: '',
+    jdLink: '',
+    notes: '',
+    jdText: ''
+  }
 };
+
+const APPLICATION_STATUSES = [
+  ['draft', 'Chưa gửi'],
+  ['sent', 'Đã gửi'],
+  ['interview', 'Phỏng vấn'],
+  ['offer', 'Có offer'],
+  ['rejected', 'Bị từ chối'],
+  ['noreply', 'Không phản hồi']
+];
+
+function blankApplication() {
+  return { company: '', position: '', status: 'draft', sentDate: '', jdLink: '', notes: '', jdText: '' };
+}
+
+function getStatusLabel(key) {
+  const found = APPLICATION_STATUSES.find(([k]) => k === key);
+  return found ? found[1] : APPLICATION_STATUSES[0][1];
+}
 
 // Helper to format URLs to ensure clickable links in HTML & PDF
 function formatUrl(url) {
@@ -239,28 +267,50 @@ function migrateData(data) {
   if (!Array.isArray(data.languages)) data.languages = [];
   if (!Array.isArray(data.customSections)) data.customSections = [];
 
-  // Normalise nested items so a hand-edited / imported JSON cannot crash the editor
-  const toBullets = b => (Array.isArray(b) ? b : []).map(x => (typeof x === 'string' ? x : String(x ?? '')));
-  data.experience.forEach(e => { e.bullets = toBullets(e.bullets); });
-  data.projects.forEach(p => {
-    p.bullets = toBullets(p.bullets);
-    p.tags = Array.isArray(p.tags) ? p.tags.map(String) : [];
+  // Application tracking block (company, status, JD...)
+  if (!data.application || typeof data.application !== 'object' || Array.isArray(data.application)) {
+    data.application = blankApplication();
+  }
+  const appBlank = blankApplication();
+  Object.keys(appBlank).forEach(k => {
+    if (typeof data.application[k] !== 'string') data.application[k] = appBlank[k];
   });
-  data.customSections.forEach(c => { c.bullets = toBullets(c.bullets); });
+  if (!APPLICATION_STATUSES.some(([k]) => k === data.application.status)) data.application.status = 'draft';
+
+  // Normalise nested items so a hand-edited / imported JSON cannot crash the editor.
+  // IMPORTANT: fix arrays IN PLACE - the editor keeps references to them between renders.
+  const fixStrings = (obj, key) => {
+    if (!Array.isArray(obj[key])) { obj[key] = []; return; }
+    const arr = obj[key];
+    for (let i = 0; i < arr.length; i++) {
+      if (typeof arr[i] !== 'string') arr[i] = String(arr[i] ?? '');
+    }
+  };
+  data.experience.forEach(e => fixStrings(e, 'bullets'));
+  data.projects.forEach(p => { fixStrings(p, 'bullets'); fixStrings(p, 'tags'); });
+  data.customSections.forEach(c => fixStrings(c, 'bullets'));
   data.skills.forEach(c => { if (!Array.isArray(c.items)) c.items = []; });
-  data.header.contacts = data.header.contacts.filter(c => c && typeof c === 'object');
+  for (let i = data.header.contacts.length - 1; i >= 0; i--) {
+    const c = data.header.contacts[i];
+    if (!c || typeof c !== 'object') data.header.contacts.splice(i, 1);
+  }
 
   // Make sure every known section appears in exactly one column order
   const known = ['experience', 'projects', 'certifications', 'education', 'skills', 'languages', 'customSections'];
-  const dedupe = arr => arr.filter((k, i) => known.includes(k) && arr.indexOf(k) === i);
-  data.theme.sectionOrderMain = dedupe(data.theme.sectionOrderMain);
-  data.theme.sectionOrderSide = dedupe(data.theme.sectionOrderSide)
-    .filter(k => !data.theme.sectionOrderMain.includes(k));
+  const main = data.theme.sectionOrderMain;
+  const side = data.theme.sectionOrderSide;
+  const cleanMain = main.filter((k, i) => known.includes(k) && main.indexOf(k) === i);
+  const cleanSide = side.filter((k, i) => known.includes(k) && side.indexOf(k) === i && !cleanMain.includes(k));
   known.forEach(k => {
-    if (!data.theme.sectionOrderMain.includes(k) && !data.theme.sectionOrderSide.includes(k)) {
-      data.theme.sectionOrderSide.push(k);
-    }
+    if (!cleanMain.includes(k) && !cleanSide.includes(k)) cleanSide.push(k);
   });
+  const setInPlace = (arr, next) => {
+    if (arr.length === next.length && arr.every((v, i) => v === next[i])) return;
+    arr.length = 0;
+    arr.push(...next);
+  };
+  setInPlace(main, cleanMain);
+  setInPlace(side, cleanSide);
 }
 
 // Application State
@@ -278,6 +328,7 @@ const openEditorSections = new Set(['Thông tin cá nhân']);
 window.addEventListener('DOMContentLoaded', () => {
   loadProfilesFromStorage();
   setupEventListeners();
+  setupTracker();
   renderProfileDropdown();
   renderEditor();
   updatePreview();
@@ -313,8 +364,12 @@ function loadProfilesFromStorage() {
   }
 }
 
+function newProfileId() {
+  return 'profile_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+}
+
 function initializeDefaultProfile() {
-  const id = 'profile_' + Date.now();
+  const id = newProfileId();
   appState.profiles = {};
   appState.profiles[id] = {
     name: 'CV mặc định',
@@ -341,9 +396,17 @@ function getActiveData() {
 }
 
 // Save active CV data and update preview
+let jdLiveRefresh = null;
+let jdRefreshTimer = null;
+
 function updateDataAndPreview() {
   saveProfilesToStorage();
   updatePreview();
+  // Keep the JD match result in sync while the CV is being edited
+  if (jdLiveRefresh) {
+    clearTimeout(jdRefreshTimer);
+    jdRefreshTimer = setTimeout(() => { if (jdLiveRefresh) jdLiveRefresh(); }, 250);
+  }
 }
 
 // Setup top control actions
@@ -360,13 +423,15 @@ function setupEventListeners() {
   document.getElementById('btn-new-profile').addEventListener('click', () => {
     const name = prompt('Nhập tên phiên bản CV mới:', 'Bản sao CV');
     if (name && name.trim() !== '') {
-      const id = 'profile_' + Date.now();
+      const id = newProfileId();
       const baseData = appState.profiles[appState.currentProfileId]
         ? appState.profiles[appState.currentProfileId].data
         : defaultCvData;
+      const copy = JSON.parse(JSON.stringify(baseData));
+      copy.application = blankApplication(); // a new version is for a new application
       appState.profiles[id] = {
         name: name.trim(),
-        data: JSON.parse(JSON.stringify(baseData))
+        data: copy
       };
       appState.currentProfileId = id;
       saveProfilesToStorage();
@@ -441,7 +506,7 @@ function setupEventListeners() {
 
         const name = prompt('Đặt tên cho phiên bản nhập khẩu này:', file.name.replace('.json', ''));
         if (name) {
-          const id = 'profile_' + Date.now();
+          const id = newProfileId();
           appState.profiles[id] = {
             name: name.trim(),
             data: importedData
@@ -464,7 +529,10 @@ function setupEventListeners() {
   // Reset to default
   document.getElementById('btn-reset-default').addEventListener('click', () => {
     if (confirm('Bạn có chắc muốn đặt lại phiên bản này về dữ liệu gốc? Mọi thay đổi hiện tại của phiên bản này sẽ bị mất.')) {
-      appState.profiles[appState.currentProfileId].data = JSON.parse(JSON.stringify(defaultCvData));
+      const keepApplication = getActiveData().application;
+      const fresh = JSON.parse(JSON.stringify(defaultCvData));
+      fresh.application = keepApplication; // resetting the CV content must not erase tracking info
+      appState.profiles[appState.currentProfileId].data = fresh;
       saveProfilesToStorage();
       renderEditor();
       updatePreview();
@@ -524,15 +592,398 @@ function autoFitToOnePage() {
   updatePreview();
 }
 
+function profileLabel(profile) {
+  const a = profile.data && profile.data.application;
+  if (!a) return profile.name;
+  const extra = [];
+  if (a.company) extra.push(a.company);
+  if (a.status && a.status !== 'draft') extra.push(getStatusLabel(a.status));
+  return extra.length ? `${profile.name} · ${extra.join(' · ')}` : profile.name;
+}
+
 function renderProfileDropdown() {
   const select = document.getElementById('profile-select');
   select.innerHTML = '';
   Object.keys(appState.profiles).forEach(id => {
     const opt = document.createElement('option');
     opt.value = id;
-    opt.textContent = appState.profiles[id].name;
+    opt.textContent = profileLabel(appState.profiles[id]);
     opt.selected = (id === appState.currentProfileId);
     select.appendChild(opt);
+  });
+}
+
+// ---- Application tracker + JD matcher ----
+function todayIso() {
+  const d = new Date();
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+function formatDateVi(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : '';
+}
+
+function createSelectInput(label, options, value, onChange) {
+  const grp = document.createElement('div');
+  grp.className = 'form-group half';
+  const lbl = document.createElement('label');
+  lbl.textContent = label;
+  const select = document.createElement('select');
+  select.className = 'form-control';
+  options.forEach(([val, text]) => {
+    const opt = document.createElement('option');
+    opt.value = val;
+    opt.textContent = text;
+    opt.selected = (val === value);
+    select.appendChild(opt);
+  });
+  select.addEventListener('change', e => onChange(e.target.value));
+  grp.appendChild(lbl);
+  grp.appendChild(select);
+  grp.select = select;
+  return grp;
+}
+
+function createDateInput(label, value, onChange) {
+  const grp = document.createElement('div');
+  grp.className = 'form-group half';
+  const lbl = document.createElement('label');
+  lbl.textContent = label;
+  const input = document.createElement('input');
+  input.type = 'date';
+  input.className = 'form-control';
+  input.value = value || '';
+  input.addEventListener('input', e => onChange(e.target.value));
+  grp.appendChild(lbl);
+  grp.appendChild(input);
+  grp.input = input;
+  return grp;
+}
+
+function makeChip(text, kind, title) {
+  const chip = document.createElement('span');
+  chip.className = `jd-chip jd-chip-${kind}`;
+  chip.textContent = text;
+  if (title) chip.title = title;
+  return chip;
+}
+
+function makeChipGroup(titleText, chips) {
+  const wrap = document.createElement('div');
+  wrap.className = 'jd-group';
+  const h = document.createElement('div');
+  h.className = 'jd-group-title';
+  h.textContent = titleText;
+  const list = document.createElement('div');
+  list.className = 'jd-chips';
+  chips.forEach(c => list.appendChild(c));
+  wrap.appendChild(h);
+  wrap.appendChild(list);
+  return wrap;
+}
+
+function renderJdResult(container, data) {
+  container.innerHTML = '';
+  const note = text => {
+    const p = document.createElement('p');
+    p.className = 'helper-text';
+    p.textContent = text;
+    container.appendChild(p);
+  };
+  if (!window.JdMatch) {
+    note('Không tải được jd-match.js — hãy kiểm tra file này nằm cùng thư mục với index.html.');
+    return;
+  }
+  const res = window.JdMatch.analyze(data.application.jdText, window.JdMatch.buildCvText(data));
+  if (res.empty) {
+    note('Hãy dán nội dung JD (ít nhất vài dòng) rồi bấm "Phân tích".');
+    return;
+  }
+  if (res.matched.length + res.missing.length === 0) {
+    note('Không nhận ra từ khóa kỹ thuật quen thuộc nào trong JD này. Bạn thử dán đủ phần Yêu cầu / Requirements nhé.');
+  } else {
+    const level = res.score >= 70 ? 'good' : res.score >= 40 ? 'mid' : 'low';
+    const levelText = res.score >= 70 ? 'Khớp tốt' : res.score >= 40 ? 'Khớp khá' : 'Khớp thấp';
+    const scoreRow = document.createElement('div');
+    scoreRow.className = `jd-score jd-score-${level}`;
+    const num = document.createElement('span');
+    num.className = 'jd-score-num';
+    num.textContent = `${res.score}%`;
+    const lab = document.createElement('span');
+    lab.className = 'jd-score-label';
+    lab.textContent = `${levelText} — ${res.matched.length}/${res.matched.length + res.missing.length} từ khóa của JD đã có trong CV`;
+    const bar = document.createElement('div');
+    bar.className = 'jd-bar';
+    const fill = document.createElement('div');
+    fill.className = 'jd-bar-fill';
+    fill.style.width = `${res.score}%`;
+    bar.appendChild(fill);
+    scoreRow.appendChild(num);
+    scoreRow.appendChild(lab);
+    container.appendChild(scoreRow);
+    container.appendChild(bar);
+
+    const fmt = x => (x.freq > 1 ? `${x.term} ×${x.freq}` : x.term);
+    if (res.missing.length) {
+      container.appendChild(makeChipGroup(
+        `Thiếu trong CV (${res.missing.length}) — xếp theo mức nhắc đến trong JD`,
+        res.missing.map(x => makeChip(fmt(x), 'miss'))
+      ));
+    }
+    if (res.matched.length) {
+      container.appendChild(makeChipGroup(
+        `Đã có trong CV (${res.matched.length})`,
+        res.matched.map(x => makeChip(fmt(x), 'ok'))
+      ));
+    }
+  }
+  if (res.extras.length) {
+    container.appendChild(makeChipGroup(
+      'Thuật ngữ viết tắt khác trong JD (không tính điểm)',
+      res.extras.map(x => makeChip(x.freq > 1 ? `${x.token} ×${x.freq}` : x.token, x.inCv ? 'ok' : 'neutral'))
+    ));
+  }
+  note('Chỉ thêm vào CV những kỹ năng bạn thật sự biết / đã làm. Từ khóa thiếu là gợi ý để bạn rà lại, không phải việc bắt buộc phải điền cho đủ.');
+}
+
+function buildApplicationSection(data) {
+  const app = data.application;
+  const sec = createFormSection('🎯 Ứng tuyển & Khớp JD (không in ra CV)');
+
+  const hint = document.createElement('p');
+  hint.className = 'helper-text mb-2';
+  hint.textContent = 'Ghi lại vị trí đang ứng tuyển bằng phiên bản CV này, rồi dán JD để xem CV đã có / còn thiếu từ khóa nào. Mục này không xuất hiện trên CV/PDF.';
+  sec.appendChild(hint);
+
+  const onMetaChange = () => {
+    saveProfilesToStorage();
+    renderProfileDropdown();
+    if (typeof refreshTrackerIfOpen === 'function') refreshTrackerIfOpen();
+  };
+
+  const rowNames = document.createElement('div');
+  rowNames.className = 'form-group-row';
+  rowNames.appendChild(createTextInput('Công ty', app.company, val => { app.company = val; onMetaChange(); }, 'half'));
+  rowNames.appendChild(createTextInput('Vị trí ứng tuyển', app.position, val => { app.position = val; onMetaChange(); }, 'half'));
+  sec.appendChild(rowNames);
+
+  const rowStatus = document.createElement('div');
+  rowStatus.className = 'form-group-row';
+  const dateGrp = createDateInput('Ngày gửi CV', app.sentDate, val => { app.sentDate = val; onMetaChange(); });
+  const statusGrp = createSelectInput('Trạng thái', APPLICATION_STATUSES, app.status, val => {
+    app.status = val;
+    // Convenience: the first time it becomes "Đã gửi", stamp today's date
+    if (val === 'sent' && !app.sentDate) {
+      app.sentDate = todayIso();
+      dateGrp.input.value = app.sentDate;
+    }
+    onMetaChange();
+  });
+  rowStatus.appendChild(statusGrp);
+  rowStatus.appendChild(dateGrp);
+  sec.appendChild(rowStatus);
+
+  sec.appendChild(createTextInput('Link tin tuyển dụng (TopCV, LinkedIn...)', app.jdLink, val => { app.jdLink = val; onMetaChange(); }));
+  sec.appendChild(createTextareaInput('Ghi chú (người liên hệ, hạn nộp, lịch phỏng vấn...)', app.notes, val => { app.notes = val; saveProfilesToStorage(); }));
+
+  // --- JD matcher ---
+  const jdTitle = document.createElement('label');
+  jdTitle.className = 'mt-2';
+  jdTitle.style.cssText = 'display:block;font-weight:600;font-size:0.8rem;color:var(--app-text);margin-bottom:0.25rem;';
+  jdTitle.textContent = 'Khớp CV với JD (phân tích từ khóa ATS)';
+  sec.appendChild(jdTitle);
+
+  const result = document.createElement('div');
+  result.className = 'jd-result';
+  let analyzed = false;
+  const run = () => { analyzed = true; renderJdResult(result, data); };
+
+  const jdGrp = createTextareaInput('Dán nội dung JD (Mô tả công việc + Yêu cầu)', app.jdText, val => {
+    app.jdText = val;
+    saveProfilesToStorage();
+  });
+  jdGrp.querySelector('textarea').rows = 8;
+  sec.appendChild(jdGrp);
+
+  const btnRun = document.createElement('button');
+  btnRun.type = 'button';
+  btnRun.className = 'btn btn-block btn-analyze-jd';
+  btnRun.textContent = '🔍 Phân tích độ khớp CV ↔ JD';
+  btnRun.addEventListener('click', run);
+  sec.appendChild(btnRun);
+  sec.appendChild(result);
+
+  // After the first analysis the result follows CV edits automatically
+  jdLiveRefresh = () => {
+    if (analyzed && result.isConnected) renderJdResult(result, getActiveData());
+  };
+  return sec;
+}
+
+// ---- Tracker overlay (table of every CV version + its application status) ----
+function getTrackerRows() {
+  const rows = Object.entries(appState.profiles).map(([id, p]) => ({
+    id,
+    name: p.name,
+    app: (p.data && p.data.application) || blankApplication()
+  }));
+  rows.sort((a, b) => {
+    if (a.app.sentDate && b.app.sentDate) return b.app.sentDate.localeCompare(a.app.sentDate);
+    if (a.app.sentDate) return -1;
+    if (b.app.sentDate) return 1;
+    return a.name.localeCompare(b.name);
+  });
+  return rows;
+}
+
+function renderTracker() {
+  const body = document.getElementById('tracker-body');
+  const summary = document.getElementById('tracker-summary');
+  if (!body || !summary) return;
+  body.innerHTML = '';
+  summary.innerHTML = '';
+  const rows = getTrackerRows();
+
+  const counts = {};
+  rows.forEach(r => { counts[r.app.status] = (counts[r.app.status] || 0) + 1; });
+  APPLICATION_STATUSES.forEach(([key, label]) => {
+    if (!counts[key]) return;
+    const badge = document.createElement('span');
+    badge.className = `status-badge st-${key}`;
+    badge.textContent = `${label}: ${counts[key]}`;
+    summary.appendChild(badge);
+  });
+
+  rows.forEach(r => {
+    const tr = document.createElement('tr');
+    if (r.id === appState.currentProfileId) tr.className = 'is-current';
+    const cell = text => {
+      const td = document.createElement('td');
+      td.textContent = text;
+      tr.appendChild(td);
+      return td;
+    };
+    cell(r.name + (r.id === appState.currentProfileId ? '  ◀ đang mở' : ''));
+    cell(r.app.company || '—');
+    cell(r.app.position || '—');
+    const tdStatus = document.createElement('td');
+    const st = document.createElement('span');
+    st.className = `status-badge st-${r.app.status}`;
+    st.textContent = getStatusLabel(r.app.status);
+    tdStatus.appendChild(st);
+    tr.appendChild(tdStatus);
+    cell(formatDateVi(r.app.sentDate) || '—');
+    const tdLink = document.createElement('td');
+    const url = r.app.jdLink ? formatUrl(r.app.jdLink) : '';
+    if (/^https?:\/\//i.test(url)) {
+      const a = document.createElement('a');
+      a.href = url;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.textContent = 'Mở';
+      a.addEventListener('click', e => e.stopPropagation());
+      tdLink.appendChild(a);
+    } else {
+      tdLink.textContent = '—';
+    }
+    tr.appendChild(tdLink);
+    tr.addEventListener('click', () => {
+      appState.currentProfileId = r.id;
+      saveProfilesToStorage();
+      closeTracker();
+      renderProfileDropdown();
+      renderEditor();
+      updatePreview();
+    });
+    body.appendChild(tr);
+  });
+}
+
+function openTracker() {
+  const overlay = document.getElementById('tracker-overlay');
+  if (!overlay) return;
+  renderTracker();
+  overlay.hidden = false;
+}
+
+function closeTracker() {
+  const overlay = document.getElementById('tracker-overlay');
+  if (overlay) overlay.hidden = true;
+}
+
+function refreshTrackerIfOpen() {
+  const overlay = document.getElementById('tracker-overlay');
+  if (overlay && !overlay.hidden) renderTracker();
+}
+
+// CSV cell: quote everything, and neutralise spreadsheet formulas (=, +, -, @)
+function csvCell(value) {
+  let str = String(value === null || value === undefined ? '' : value);
+  if (/^[=+\-@\t\r]/.test(str)) str = "'" + str;
+  return '"' + str.replace(/"/g, '""') + '"';
+}
+
+function buildTrackerCsv() {
+  const header = ['Phiên bản CV', 'Công ty', 'Vị trí', 'Trạng thái', 'Ngày gửi', 'Link JD', 'Ghi chú'];
+  const lines = [header.map(csvCell).join(',')];
+  getTrackerRows().forEach(r => {
+    lines.push([
+      r.name, r.app.company, r.app.position, getStatusLabel(r.app.status),
+      formatDateVi(r.app.sentDate), r.app.jdLink, r.app.notes
+    ].map(csvCell).join(','));
+  });
+  return '﻿' + lines.join('\r\n'); // BOM so Excel reads Vietnamese correctly
+}
+
+function exportTrackerCsv() {
+  const blob = new Blob([buildTrackerCsv()], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `theo_doi_ung_tuyen_${todayIso()}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function setupTracker() {
+  const bind = (id, fn) => { const el = document.getElementById(id); if (el) el.addEventListener('click', fn); };
+  bind('btn-tracker', openTracker);
+  bind('btn-tracker-close', closeTracker);
+  bind('btn-tracker-csv', exportTrackerCsv);
+  const overlay = document.getElementById('tracker-overlay');
+  if (overlay) {
+    overlay.addEventListener('click', e => { if (e.target === overlay) closeTracker(); });
+  }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeTracker(); });
+}
+
+// ---- Shared list helpers (move up / move down / delete for editor cards) ----
+function bindMoveActions(root, arr, idx) {
+  const swapWith = (j) => {
+    if (j < 0 || j >= arr.length) return;
+    [arr[idx], arr[j]] = [arr[j], arr[idx]];
+    updateDataAndPreview();
+    renderEditor();
+  };
+  const up = root.querySelector('.btn-move-up');
+  const down = root.querySelector('.btn-move-down');
+  if (up) up.addEventListener('click', () => swapWith(idx - 1));
+  if (down) down.addEventListener('click', () => swapWith(idx + 1));
+}
+
+// confirmMsg: optional function returning the confirm text (evaluated on click, so renamed items show the new name)
+function bindDeleteAction(root, selector, arr, idx, confirmMsg) {
+  const btn = root.querySelector(selector);
+  if (!btn) return;
+  btn.addEventListener('click', () => {
+    if (confirmMsg && !confirm(confirmMsg())) return;
+    arr.splice(idx, 1);
+    updateDataAndPreview();
+    renderEditor();
   });
 }
 
@@ -557,6 +1008,10 @@ function renderEditor() {
   // Update document title dynamically
   const currentUserName = data.header && data.header.name ? data.header.name.trim() : FALLBACK_NAME;
   document.title = `CV - ${currentUserName}`;
+
+  // 0. Application tracking + JD matcher
+  jdLiveRefresh = null;
+  editor.appendChild(buildApplicationSection(data));
 
   // 1. Theme and Fonts Section
   const secTheme = createFormSection('Theme & Font (Màu sắc và Bố cục)');
@@ -775,24 +1230,7 @@ function renderEditor() {
         <button type="button" class="btn-icon btn-move-down" title="Di chuyển xuống" ${idx === data.theme.sectionOrderMain.length - 1 ? 'disabled' : ''}>↓</button>
       </div>
     `;
-    if (idx > 0) {
-      itemDiv.querySelector('.btn-move-up').addEventListener('click', () => {
-        const temp = data.theme.sectionOrderMain[idx];
-        data.theme.sectionOrderMain[idx] = data.theme.sectionOrderMain[idx - 1];
-        data.theme.sectionOrderMain[idx - 1] = temp;
-        updateDataAndPreview();
-        renderEditor();
-      });
-    }
-    if (idx < data.theme.sectionOrderMain.length - 1) {
-      itemDiv.querySelector('.btn-move-down').addEventListener('click', () => {
-        const temp = data.theme.sectionOrderMain[idx];
-        data.theme.sectionOrderMain[idx] = data.theme.sectionOrderMain[idx + 1];
-        data.theme.sectionOrderMain[idx + 1] = temp;
-        updateDataAndPreview();
-        renderEditor();
-      });
-    }
+    bindMoveActions(itemDiv, data.theme.sectionOrderMain, idx);
     mainListDiv.appendChild(itemDiv);
   });
   secOrder.appendChild(mainListDiv);
@@ -819,24 +1257,7 @@ function renderEditor() {
         <button type="button" class="btn-icon btn-move-down" title="Di chuyển xuống" ${idx === data.theme.sectionOrderSide.length - 1 ? 'disabled' : ''}>↓</button>
       </div>
     `;
-    if (idx > 0) {
-      itemDiv.querySelector('.btn-move-up').addEventListener('click', () => {
-        const temp = data.theme.sectionOrderSide[idx];
-        data.theme.sectionOrderSide[idx] = data.theme.sectionOrderSide[idx - 1];
-        data.theme.sectionOrderSide[idx - 1] = temp;
-        updateDataAndPreview();
-        renderEditor();
-      });
-    }
-    if (idx < data.theme.sectionOrderSide.length - 1) {
-      itemDiv.querySelector('.btn-move-down').addEventListener('click', () => {
-        const temp = data.theme.sectionOrderSide[idx];
-        data.theme.sectionOrderSide[idx] = data.theme.sectionOrderSide[idx + 1];
-        data.theme.sectionOrderSide[idx + 1] = temp;
-        updateDataAndPreview();
-        renderEditor();
-      });
-    }
+    bindMoveActions(itemDiv, data.theme.sectionOrderSide, idx);
     sideListDiv.appendChild(itemDiv);
   });
   secOrder.appendChild(sideListDiv);
@@ -932,31 +1353,8 @@ function renderEditor() {
     }));
 
     // Actions
-    card.querySelector('.btn-delete').addEventListener('click', () => {
-      if (confirm('Xóa thông tin này?')) {
-        data.header.contacts.splice(index, 1);
-        updateDataAndPreview();
-        renderEditor();
-      }
-    });
-    if (index > 0) {
-      card.querySelector('.btn-move-up').addEventListener('click', () => {
-        const temp = data.header.contacts[index];
-        data.header.contacts[index] = data.header.contacts[index - 1];
-        data.header.contacts[index - 1] = temp;
-        updateDataAndPreview();
-        renderEditor();
-      });
-    }
-    if (index < data.header.contacts.length - 1) {
-      card.querySelector('.btn-move-down').addEventListener('click', () => {
-        const temp = data.header.contacts[index];
-        data.header.contacts[index] = data.header.contacts[index + 1];
-        data.header.contacts[index + 1] = temp;
-        updateDataAndPreview();
-        renderEditor();
-      });
-    }
+    bindDeleteAction(card, '.btn-delete', data.header.contacts, index, () => 'Xóa thông tin này?');
+    bindMoveActions(card, data.header.contacts, index);
 
     contactsContainer.appendChild(card);
   });
@@ -1028,31 +1426,8 @@ function renderEditor() {
       updateDataAndPreview();
     }));
 
-    card.querySelector('.btn-delete').addEventListener('click', () => {
-      if (confirm('Xóa mục kinh nghiệm này?')) {
-        data.experience.splice(index, 1);
-        updateDataAndPreview();
-        renderEditor();
-      }
-    });
-    if (index > 0) {
-      card.querySelector('.btn-move-up').addEventListener('click', () => {
-        const temp = data.experience[index];
-        data.experience[index] = data.experience[index - 1];
-        data.experience[index - 1] = temp;
-        updateDataAndPreview();
-        renderEditor();
-      });
-    }
-    if (index < data.experience.length - 1) {
-      card.querySelector('.btn-move-down').addEventListener('click', () => {
-        const temp = data.experience[index];
-        data.experience[index] = data.experience[index + 1];
-        data.experience[index + 1] = temp;
-        updateDataAndPreview();
-        renderEditor();
-      });
-    }
+    bindDeleteAction(card, '.btn-delete', data.experience, index, () => 'Xóa mục kinh nghiệm này?');
+    bindMoveActions(card, data.experience, index);
 
     expContainer.appendChild(card);
   });
@@ -1127,31 +1502,8 @@ function renderEditor() {
       updateDataAndPreview();
     }));
 
-    card.querySelector('.btn-delete').addEventListener('click', () => {
-      if (confirm('Xóa dự án này?')) {
-        data.projects.splice(index, 1);
-        updateDataAndPreview();
-        renderEditor();
-      }
-    });
-    if (index > 0) {
-      card.querySelector('.btn-move-up').addEventListener('click', () => {
-        const temp = data.projects[index];
-        data.projects[index] = data.projects[index - 1];
-        data.projects[index - 1] = temp;
-        updateDataAndPreview();
-        renderEditor();
-      });
-    }
-    if (index < data.projects.length - 1) {
-      card.querySelector('.btn-move-down').addEventListener('click', () => {
-        const temp = data.projects[index];
-        data.projects[index] = data.projects[index + 1];
-        data.projects[index + 1] = temp;
-        updateDataAndPreview();
-        renderEditor();
-      });
-    }
+    bindDeleteAction(card, '.btn-delete', data.projects, index, () => 'Xóa dự án này?');
+    bindMoveActions(card, data.projects, index);
 
     projContainer.appendChild(card);
   });
@@ -1221,31 +1573,8 @@ function renderEditor() {
       updateDataAndPreview();
     }));
 
-    card.querySelector('.btn-delete').addEventListener('click', () => {
-      if (confirm('Xóa chứng chỉ này?')) {
-        data.certifications.splice(index, 1);
-        updateDataAndPreview();
-        renderEditor();
-      }
-    });
-    if (index > 0) {
-      card.querySelector('.btn-move-up').addEventListener('click', () => {
-        const temp = data.certifications[index];
-        data.certifications[index] = data.certifications[index - 1];
-        data.certifications[index - 1] = temp;
-        updateDataAndPreview();
-        renderEditor();
-      });
-    }
-    if (index < data.certifications.length - 1) {
-      card.querySelector('.btn-move-down').addEventListener('click', () => {
-        const temp = data.certifications[index];
-        data.certifications[index] = data.certifications[index + 1];
-        data.certifications[index + 1] = temp;
-        updateDataAndPreview();
-        renderEditor();
-      });
-    }
+    bindDeleteAction(card, '.btn-delete', data.certifications, index, () => 'Xóa chứng chỉ này?');
+    bindMoveActions(card, data.certifications, index);
 
     certContainer.appendChild(card);
   });
@@ -1305,31 +1634,8 @@ function renderEditor() {
       updateDataAndPreview();
     }));
 
-    card.querySelector('.btn-delete').addEventListener('click', () => {
-      if (confirm('Xóa mục học vấn này?')) {
-        data.education.splice(index, 1);
-        updateDataAndPreview();
-        renderEditor();
-      }
-    });
-    if (index > 0) {
-      card.querySelector('.btn-move-up').addEventListener('click', () => {
-        const temp = data.education[index];
-        data.education[index] = data.education[index - 1];
-        data.education[index - 1] = temp;
-        updateDataAndPreview();
-        renderEditor();
-      });
-    }
-    if (index < data.education.length - 1) {
-      card.querySelector('.btn-move-down').addEventListener('click', () => {
-        const temp = data.education[index];
-        data.education[index] = data.education[index + 1];
-        data.education[index + 1] = temp;
-        updateDataAndPreview();
-        renderEditor();
-      });
-    }
+    bindDeleteAction(card, '.btn-delete', data.education, index, () => 'Xóa mục học vấn này?');
+    bindMoveActions(card, data.education, index);
 
     eduContainer.appendChild(card);
   });
@@ -1420,36 +1726,11 @@ function renderEditor() {
       updateDataAndPreview();
     });
 
-    // Move Up category
-    if (catIdx > 0) {
-      catDiv.querySelector('.btn-move-up').addEventListener('click', () => {
-        const temp = data.skills[catIdx];
-        data.skills[catIdx] = data.skills[catIdx - 1];
-        data.skills[catIdx - 1] = temp;
-        updateDataAndPreview();
-        renderEditor();
-      });
-    }
+    bindMoveActions(catDiv, data.skills, catIdx);
 
-    // Move Down category
-    if (catIdx < data.skills.length - 1) {
-      catDiv.querySelector('.btn-move-down').addEventListener('click', () => {
-        const temp = data.skills[catIdx];
-        data.skills[catIdx] = data.skills[catIdx + 1];
-        data.skills[catIdx + 1] = temp;
-        updateDataAndPreview();
-        renderEditor();
-      });
-    }
 
     // Delete category
-    catDiv.querySelector('.btn-delete-cat').addEventListener('click', () => {
-      if (confirm(`Xóa toàn bộ nhóm kỹ năng "${skillCat.category}"?`)) {
-        data.skills.splice(catIdx, 1);
-        updateDataAndPreview();
-        renderEditor();
-      }
-    });
+    bindDeleteAction(catDiv, '.btn-delete-cat', data.skills, catIdx, () => `Xóa toàn bộ nhóm kỹ năng "${skillCat.category}"?`);
 
     skillsContainer.appendChild(catDiv);
   });
@@ -1502,29 +1783,8 @@ function renderEditor() {
       item.level = e.target.value;
       updateDataAndPreview();
     });
-    row.querySelector('.btn-delete-lang').addEventListener('click', () => {
-      data.languages.splice(index, 1);
-      updateDataAndPreview();
-      renderEditor();
-    });
-    if (index > 0) {
-      row.querySelector('.btn-move-up').addEventListener('click', () => {
-        const temp = data.languages[index];
-        data.languages[index] = data.languages[index - 1];
-        data.languages[index - 1] = temp;
-        updateDataAndPreview();
-        renderEditor();
-      });
-    }
-    if (index < data.languages.length - 1) {
-      row.querySelector('.btn-move-down').addEventListener('click', () => {
-        const temp = data.languages[index];
-        data.languages[index] = data.languages[index + 1];
-        data.languages[index + 1] = temp;
-        updateDataAndPreview();
-        renderEditor();
-      });
-    }
+    bindDeleteAction(row, '.btn-delete-lang', data.languages, index);
+    bindMoveActions(row, data.languages, index);
 
     langContainer.appendChild(row);
   });
@@ -1576,31 +1836,8 @@ function renderEditor() {
       updateDataAndPreview();
     }));
 
-    card.querySelector('.btn-delete').addEventListener('click', () => {
-      if (confirm(`Xóa mục tùy chỉnh "${cSec.title}"?`)) {
-        data.customSections.splice(secIdx, 1);
-        updateDataAndPreview();
-        renderEditor();
-      }
-    });
-    if (secIdx > 0) {
-      card.querySelector('.btn-move-up').addEventListener('click', () => {
-        const temp = data.customSections[secIdx];
-        data.customSections[secIdx] = data.customSections[secIdx - 1];
-        data.customSections[secIdx - 1] = temp;
-        updateDataAndPreview();
-        renderEditor();
-      });
-    }
-    if (secIdx < data.customSections.length - 1) {
-      card.querySelector('.btn-move-down').addEventListener('click', () => {
-        const temp = data.customSections[secIdx];
-        data.customSections[secIdx] = data.customSections[secIdx + 1];
-        data.customSections[secIdx + 1] = temp;
-        updateDataAndPreview();
-        renderEditor();
-      });
-    }
+    bindDeleteAction(card, '.btn-delete', data.customSections, secIdx, () => `Xóa mục tùy chỉnh "${cSec.title}"?`);
+    bindMoveActions(card, data.customSections, secIdx);
 
     customContainer.appendChild(card);
   });
