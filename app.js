@@ -137,6 +137,7 @@ const defaultCvData = {
     company: '',
     position: '',
     status: 'draft',
+    deadline: '',
     sentDate: '',
     jdLink: '',
     notes: '',
@@ -154,7 +155,7 @@ const APPLICATION_STATUSES = [
 ];
 
 function blankApplication() {
-  return { company: '', position: '', status: 'draft', sentDate: '', jdLink: '', notes: '', jdText: '' };
+  return { company: '', position: '', status: 'draft', deadline: '', sentDate: '', jdLink: '', notes: '', jdText: '' };
 }
 
 function getStatusLabel(key) {
@@ -187,6 +188,28 @@ function escapeHtml(str) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+// ---- Hide / show (nothing is deleted; hidden things are just left off the CV) ----
+// A hidden bullet starts with an invisible WORD JOINER so bullet arrays stay plain strings.
+const HIDDEN_MARK = '\u2060';
+const isHiddenBullet = b => typeof b === 'string' && b.charAt(0) === HIDDEN_MARK;
+const bulletText = b => (isHiddenBullet(b) ? b.slice(1) : b);
+const HIDEABLE_SECTIONS = ['experience', 'projects', 'certifications', 'education', 'skills', 'languages', 'customSections'];
+
+// What the CV really shows: hidden sections, items and bullets removed.
+// Used by the preview and by the JD matcher so both agree with what gets printed.
+function visibleData(raw) {
+  const off = new Set((raw.theme && raw.theme.hiddenSections) || []);
+  const clean = key => {
+    if (off.has(key)) return [];
+    return (raw[key] || [])
+      .filter(x => x && !x.hidden)
+      .map(x => (Array.isArray(x.bullets) ? { ...x, bullets: x.bullets.filter(b => !isHiddenBullet(b)) } : x));
+  };
+  const out = { ...raw };
+  HIDEABLE_SECTIONS.forEach(k => { out[k] = clean(k); });
+  return out;
 }
 
 // Allow only simple inline formatting tags in rich text (bullets, summary).
@@ -304,6 +327,11 @@ function migrateData(data) {
   known.forEach(k => {
     if (!cleanMain.includes(k) && !cleanSide.includes(k)) cleanSide.push(k);
   });
+  if (!Array.isArray(data.theme.hiddenSections)) data.theme.hiddenSections = [];
+  for (let i = data.theme.hiddenSections.length - 1; i >= 0; i--) {
+    const k = data.theme.hiddenSections[i];
+    if (!known.includes(k) || data.theme.hiddenSections.indexOf(k) !== i) data.theme.hiddenSections.splice(i, 1);
+  }
   const setInPlace = (arr, next) => {
     if (arr.length === next.length && arr.every((v, i) => v === next[i])) return;
     arr.length = 0;
@@ -329,6 +357,7 @@ window.addEventListener('DOMContentLoaded', () => {
   loadProfilesFromStorage();
   setupEventListeners();
   setupTracker();
+  updateBackupHint();
   renderProfileDropdown();
   renderEditor();
   updatePreview();
@@ -382,6 +411,7 @@ function initializeDefaultProfile() {
 function saveProfilesToStorage() {
   try {
     localStorage.setItem('cv_builder_profiles', JSON.stringify(appState));
+    if (typeof updateBackupHint === 'function') updateBackupHint();
   } catch (e) {
     // Quota exceeded / storage blocked: keep the app working in memory
     console.error('Cannot save profiles to localStorage', e);
@@ -486,6 +516,9 @@ function setupEventListeners() {
     downloadAnchor.remove();
   });
 
+  // Backup everything
+  document.getElementById('btn-backup').addEventListener('click', exportBackup);
+
   // Import JSON
   const fileInput = document.getElementById('import-file-input');
   document.getElementById('btn-import-json').addEventListener('click', () => {
@@ -498,7 +531,13 @@ function setupEventListeners() {
     reader.onload = function(evt) {
       try {
         const importedData = JSON.parse(evt.target.result);
-        if (!importedData.header || !importedData.theme) {
+        if (importedData && importedData.format === BACKUP_FORMAT && importedData.profiles) {
+          const n = restoreBackup(importedData);
+          if (n) alert(`Đã khôi phục ${n} phiên bản CV.`);
+          fileInput.value = '';
+          return;
+        }
+        if (!importedData || !importedData.header || !importedData.theme) {
           throw new Error("Không đúng định dạng dữ liệu CV Builder.");
         }
         
@@ -601,6 +640,17 @@ function profileLabel(profile) {
   return extra.length ? `${profile.name} · ${extra.join(' · ')}` : profile.name;
 }
 
+function updateTrackerButton() {
+  const btn = document.getElementById('btn-tracker');
+  if (!btn || typeof deadlineInfo !== 'function') return;
+  const urgent = getTrackerRows().filter(r => { const d = deadlineInfo(r.app); return d && d.level !== 'ok'; }).length;
+  btn.textContent = urgent ? `📋 Theo dõi (${urgent})` : '📋 Theo dõi';
+  btn.classList.toggle('has-alert', urgent > 0);
+  btn.title = urgent
+    ? `${urgent} CV sắp hoặc đã quá hạn nộp mà chưa gửi`
+    : 'Bảng theo dõi các CV đã gửi / đang ứng tuyển';
+}
+
 function renderProfileDropdown() {
   const select = document.getElementById('profile-select');
   select.innerHTML = '';
@@ -611,6 +661,7 @@ function renderProfileDropdown() {
     opt.selected = (id === appState.currentProfileId);
     select.appendChild(opt);
   });
+  updateTrackerButton();
 }
 
 // ---- Application tracker + JD matcher ----
@@ -618,6 +669,28 @@ function todayIso() {
   const d = new Date();
   const p = n => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+// Whole days from today (local) to an ISO date; negative = already past
+function daysUntil(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+  if (!m) return null;
+  const now = new Date();
+  const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.round((Date.UTC(+m[1], +m[2] - 1, +m[3]) - today) / 86400000);
+}
+
+const DEADLINE_SOON_DAYS = 3;
+
+// Only CVs that are still "Chưa gửi" have an actionable deadline
+function deadlineInfo(app) {
+  if (!app || app.status !== 'draft' || !app.deadline) return null;
+  const days = daysUntil(app.deadline);
+  if (days === null) return null;
+  if (days < 0) return { days, level: 'over', text: `Quá hạn ${-days} ngày` };
+  if (days === 0) return { days, level: 'soon', text: 'Hạn là hôm nay' };
+  if (days <= DEADLINE_SOON_DAYS) return { days, level: 'soon', text: `Còn ${days} ngày` };
+  return { days, level: 'ok', text: `Còn ${days} ngày` };
 }
 
 function formatDateVi(iso) {
@@ -696,7 +769,7 @@ function renderJdResult(container, data) {
     note('Không tải được jd-match.js — hãy kiểm tra file này nằm cùng thư mục với index.html.');
     return;
   }
-  const res = window.JdMatch.analyze(data.application.jdText, window.JdMatch.buildCvText(data));
+  const res = window.JdMatch.analyze(data.application.jdText, window.JdMatch.buildCvText(visibleData(data)));
   if (res.empty) {
     note('Hãy dán nội dung JD (ít nhất vài dòng) rồi bấm "Phân tích".');
     return;
@@ -781,7 +854,9 @@ function buildApplicationSection(data) {
     }
     onMetaChange();
   });
+  const deadlineGrp = createDateInput('Hạn nộp', app.deadline, val => { app.deadline = val; onMetaChange(); });
   rowStatus.appendChild(statusGrp);
+  rowStatus.appendChild(deadlineGrp);
   rowStatus.appendChild(dateGrp);
   sec.appendChild(rowStatus);
 
@@ -829,7 +904,12 @@ function getTrackerRows() {
     name: p.name,
     app: (p.data && p.data.application) || blankApplication()
   }));
+  const urgentKey = r => (r.app.status === 'draft' && r.app.deadline ? r.app.deadline : null);
   rows.sort((a, b) => {
+    const ua = urgentKey(a), ub = urgentKey(b);
+    if (ua && ub) return ua.localeCompare(ub);   // nearest deadline first
+    if (ua) return -1;
+    if (ub) return 1;
     if (a.app.sentDate && b.app.sentDate) return b.app.sentDate.localeCompare(a.app.sentDate);
     if (a.app.sentDate) return -1;
     if (b.app.sentDate) return 1;
@@ -856,6 +936,14 @@ function renderTracker() {
     summary.appendChild(badge);
   });
 
+  const urgent = rows.filter(r => { const d = deadlineInfo(r.app); return d && d.level !== 'ok'; }).length;
+  if (urgent) {
+    const badge = document.createElement('span');
+    badge.className = 'status-badge dl-over';
+    badge.textContent = `⏰ Sắp / quá hạn nộp: ${urgent}`;
+    summary.insertBefore(badge, summary.firstChild);
+  }
+
   rows.forEach(r => {
     const tr = document.createElement('tr');
     if (r.id === appState.currentProfileId) tr.className = 'is-current';
@@ -874,6 +962,20 @@ function renderTracker() {
     st.textContent = getStatusLabel(r.app.status);
     tdStatus.appendChild(st);
     tr.appendChild(tdStatus);
+    const tdDeadline = document.createElement('td');
+    const dl = deadlineInfo(r.app);
+    if (r.app.deadline) {
+      tdDeadline.appendChild(document.createTextNode(formatDateVi(r.app.deadline) + ' '));
+      if (dl) {
+        const b = document.createElement('span');
+        b.className = `status-badge dl-${dl.level}`;
+        b.textContent = dl.text;
+        tdDeadline.appendChild(b);
+      }
+    } else {
+      tdDeadline.textContent = '—';
+    }
+    tr.appendChild(tdDeadline);
     cell(formatDateVi(r.app.sentDate) || '—');
     const tdLink = document.createElement('td');
     const url = r.app.jdLink ? formatUrl(r.app.jdLink) : '';
@@ -926,12 +1028,12 @@ function csvCell(value) {
 }
 
 function buildTrackerCsv() {
-  const header = ['Phiên bản CV', 'Công ty', 'Vị trí', 'Trạng thái', 'Ngày gửi', 'Link JD', 'Ghi chú'];
+  const header = ['Phiên bản CV', 'Công ty', 'Vị trí', 'Trạng thái', 'Hạn nộp', 'Ngày gửi', 'Link JD', 'Ghi chú'];
   const lines = [header.map(csvCell).join(',')];
   getTrackerRows().forEach(r => {
     lines.push([
       r.name, r.app.company, r.app.position, getStatusLabel(r.app.status),
-      formatDateVi(r.app.sentDate), r.app.jdLink, r.app.notes
+      formatDateVi(r.app.deadline), formatDateVi(r.app.sentDate), r.app.jdLink, r.app.notes
     ].map(csvCell).join(','));
   });
   return '﻿' + lines.join('\r\n'); // BOM so Excel reads Vietnamese correctly
@@ -959,6 +1061,142 @@ function setupTracker() {
     overlay.addEventListener('click', e => { if (e.target === overlay) closeTracker(); });
   }
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeTracker(); });
+}
+
+// ---- Backup / restore of ALL profiles ----
+const BACKUP_FORMAT = 'cv-builder-backup';
+const BACKUP_KEY = 'cv_builder_last_backup';
+const BACKUP_REMIND_DAYS = 7;
+
+function buildBackupObject() {
+  return {
+    format: BACKUP_FORMAT,
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    currentProfileId: appState.currentProfileId,
+    profiles: JSON.parse(JSON.stringify(appState.profiles))
+  };
+}
+
+function hasUserWork() {
+  const pristine = JSON.stringify(defaultCvData);
+  return Object.keys(appState.profiles).length > 1 ||
+    Object.values(appState.profiles).some(p => JSON.stringify(p.data) !== pristine);
+}
+
+function updateBackupHint() {
+  const btn = document.getElementById('btn-backup');
+  if (!btn) return;
+  let last = null;
+  try { last = localStorage.getItem(BACKUP_KEY); } catch (e) { last = null; }
+  const ageDays = last ? (Date.now() - new Date(last).getTime()) / 86400000 : Infinity;
+  const needs = hasUserWork() && !(ageDays < BACKUP_REMIND_DAYS);
+  btn.classList.toggle('needs-backup', needs);
+  btn.title = needs
+    ? (last ? `Lần sao lưu gần nhất đã hơn ${BACKUP_REMIND_DAYS} ngày — nên sao lưu lại` : 'Bạn chưa sao lưu lần nào — dữ liệu chỉ nằm trong trình duyệt này')
+    : 'Sao lưu TẤT CẢ phiên bản CV ra một file (khôi phục bằng nút Nhập JSON)';
+}
+
+function exportBackup() {
+  const json = JSON.stringify(buildBackupObject(), null, 2);
+  const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `cv_builder_backup_${todayIso()}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  try { localStorage.setItem(BACKUP_KEY, new Date().toISOString()); } catch (e) { /* ignore */ }
+  updateBackupHint();
+}
+
+// Merge a backup into the current state. Existing profiles are NEVER overwritten or removed.
+function restoreBackup(parsed) {
+  const entries = Object.values(parsed.profiles || {}).filter(p =>
+    p && typeof p === 'object' && p.data && typeof p.data === 'object' &&
+    p.data.header && p.data.theme);
+  if (!entries.length) throw new Error('File sao lưu không có phiên bản CV hợp lệ.');
+  if (entries.length > 200) throw new Error('File sao lưu có quá nhiều phiên bản (tối đa 200).');
+  if (!confirm(`Khôi phục ${entries.length} phiên bản CV từ file sao lưu?\nCác phiên bản hiện có được giữ nguyên (bản khôi phục được thêm vào).`)) return 0;
+
+  const existing = new Set(Object.values(appState.profiles).map(p => p.name));
+  let firstId = null;
+  entries.forEach(p => {
+    migrateData(p.data);
+    let name = String(p.name || 'CV').trim().slice(0, 120) || 'CV';
+    if (existing.has(name)) name += ' (khôi phục)';
+    existing.add(name);
+    const id = newProfileId();
+    appState.profiles[id] = { name, data: p.data };
+    if (!firstId) firstId = id;
+  });
+  appState.currentProfileId = firstId;
+  saveProfilesToStorage();
+  renderProfileDropdown();
+  renderEditor();
+  updatePreview();
+  updateBackupHint();
+  return entries.length;
+}
+
+// ---- Hide / show toggles in the editor ----
+function setHideButtonState(btn, hidden, what) {
+  btn.textContent = hidden ? '🚫' : '👁';
+  btn.title = hidden
+    ? `${what} đang ẨN khỏi CV — bấm để hiện lại`
+    : `${what} đang hiện trên CV — bấm để ẩn (không xóa dữ liệu)`;
+  btn.classList.toggle('is-off', hidden);
+  btn.setAttribute('aria-pressed', String(hidden));
+}
+
+function newHideButton(extraClass) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = `btn-icon btn-hide-toggle ${extraClass || ''}`.trim();
+  return btn;
+}
+
+// Eye button for a card / row of an array of items (experience, projects, ... languages)
+function addHideToggle(root, arr, idx) {
+  const actions = root.querySelector('.card-actions');
+  if (!actions || !arr[idx]) return;
+  const btn = newHideButton();
+  const apply = () => {
+    const off = !!(arr[idx] && arr[idx].hidden);
+    setHideButtonState(btn, off, 'Mục này');
+    root.classList.toggle('is-hidden-item', off);
+  };
+  btn.addEventListener('click', () => {
+    const cur = arr[idx];
+    if (cur.hidden) delete cur.hidden; else cur.hidden = true;
+    apply();
+    updateDataAndPreview();
+  });
+  apply();
+  actions.insertBefore(btn, actions.firstChild);
+}
+
+// Eye button for a whole section in the ordering lists
+function addSectionHideToggle(itemDiv, data, key) {
+  const actions = itemDiv.querySelector('.card-actions');
+  if (!actions) return;
+  const list = data.theme.hiddenSections;
+  const btn = newHideButton();
+  const apply = () => {
+    const off = list.includes(key);
+    setHideButtonState(btn, off, 'Cả phần này');
+    itemDiv.classList.toggle('is-hidden-item', off);
+  };
+  btn.addEventListener('click', () => {
+    const at = list.indexOf(key);
+    if (at >= 0) list.splice(at, 1); else list.push(key);
+    apply();
+    updateDataAndPreview();
+  });
+  apply();
+  actions.insertBefore(btn, actions.firstChild);
 }
 
 // ---- Shared list helpers (move up / move down / delete for editor cards) ----
@@ -1231,6 +1469,7 @@ function renderEditor() {
       </div>
     `;
     bindMoveActions(itemDiv, data.theme.sectionOrderMain, idx);
+    addSectionHideToggle(itemDiv, data, key);
     mainListDiv.appendChild(itemDiv);
   });
   secOrder.appendChild(mainListDiv);
@@ -1258,6 +1497,7 @@ function renderEditor() {
       </div>
     `;
     bindMoveActions(itemDiv, data.theme.sectionOrderSide, idx);
+    addSectionHideToggle(itemDiv, data, key);
     sideListDiv.appendChild(itemDiv);
   });
   secOrder.appendChild(sideListDiv);
@@ -1428,6 +1668,7 @@ function renderEditor() {
 
     bindDeleteAction(card, '.btn-delete', data.experience, index, () => 'Xóa mục kinh nghiệm này?');
     bindMoveActions(card, data.experience, index);
+    addHideToggle(card, data.experience, index);
 
     expContainer.appendChild(card);
   });
@@ -1504,6 +1745,7 @@ function renderEditor() {
 
     bindDeleteAction(card, '.btn-delete', data.projects, index, () => 'Xóa dự án này?');
     bindMoveActions(card, data.projects, index);
+    addHideToggle(card, data.projects, index);
 
     projContainer.appendChild(card);
   });
@@ -1575,6 +1817,7 @@ function renderEditor() {
 
     bindDeleteAction(card, '.btn-delete', data.certifications, index, () => 'Xóa chứng chỉ này?');
     bindMoveActions(card, data.certifications, index);
+    addHideToggle(card, data.certifications, index);
 
     certContainer.appendChild(card);
   });
@@ -1636,6 +1879,7 @@ function renderEditor() {
 
     bindDeleteAction(card, '.btn-delete', data.education, index, () => 'Xóa mục học vấn này?');
     bindMoveActions(card, data.education, index);
+    addHideToggle(card, data.education, index);
 
     eduContainer.appendChild(card);
   });
@@ -1727,6 +1971,7 @@ function renderEditor() {
     });
 
     bindMoveActions(catDiv, data.skills, catIdx);
+    addHideToggle(catDiv, data.skills, catIdx);
 
 
     // Delete category
@@ -1785,6 +2030,7 @@ function renderEditor() {
     });
     bindDeleteAction(row, '.btn-delete-lang', data.languages, index);
     bindMoveActions(row, data.languages, index);
+    addHideToggle(row, data.languages, index);
 
     langContainer.appendChild(row);
   });
@@ -1838,6 +2084,7 @@ function renderEditor() {
 
     bindDeleteAction(card, '.btn-delete', data.customSections, secIdx, () => `Xóa mục tùy chỉnh "${cSec.title}"?`);
     bindMoveActions(card, data.customSections, secIdx);
+    addHideToggle(card, data.customSections, secIdx);
 
     customContainer.appendChild(card);
   });
@@ -2003,9 +2250,10 @@ function createBulletListInput(label, bullets, onUpdate) {
       itemRow.className = 'bullet-item-row';
       itemRow.innerHTML = `
         <div style="flex: 1;">
-          <textarea class="form-control bullet-text-input" rows="2" placeholder="Nhập nội dung gạch đầu dòng...">${escapeHtml(bullet)}</textarea>
+          <textarea class="form-control bullet-text-input" rows="2" placeholder="Nhập nội dung gạch đầu dòng...">${escapeHtml(bulletText(bullet))}</textarea>
         </div>
         <div class="bullet-row-actions">
+          <button type="button" class="btn-icon btn-bullet-hide"></button>
           <button type="button" class="btn-icon btn-bullet-up" ${idx === 0 ? 'disabled' : ''}>↑</button>
           <button type="button" class="btn-icon btn-bullet-down" ${idx === bullets.length - 1 ? 'disabled' : ''}>↓</button>
           <button type="button" class="btn-icon btn-bullet-delete text-danger">✕</button>
@@ -2013,9 +2261,24 @@ function createBulletListInput(label, bullets, onUpdate) {
       `;
 
       itemRow.querySelector('.bullet-text-input').addEventListener('input', (e) => {
-        bullets[idx] = e.target.value;
+        // keep the hidden marker when the bullet is currently hidden
+        bullets[idx] = (isHiddenBullet(bullets[idx]) ? HIDDEN_MARK : '') + e.target.value;
         onUpdate();
       });
+
+      const hideBtn = itemRow.querySelector('.btn-bullet-hide');
+      hideBtn.classList.add('btn-hide-toggle');
+      const applyHide = () => {
+        const off = isHiddenBullet(bullets[idx]);
+        setHideButtonState(hideBtn, off, 'Dòng này');
+        itemRow.classList.toggle('is-hidden-item', off);
+      };
+      hideBtn.addEventListener('click', () => {
+        bullets[idx] = isHiddenBullet(bullets[idx]) ? bulletText(bullets[idx]) : HIDDEN_MARK + bullets[idx];
+        applyHide();
+        onUpdate();
+      });
+      applyHide();
 
       itemRow.querySelector('.btn-bullet-delete').addEventListener('click', () => {
         bullets.splice(idx, 1);
@@ -2065,7 +2328,7 @@ function createBulletListInput(label, bullets, onUpdate) {
 
 // Live Preview Updater
 function updatePreview() {
-  const data = getActiveData();
+  const data = visibleData(getActiveData());
   const preview = document.getElementById('preview-cv');
   
   if (!preview) return;

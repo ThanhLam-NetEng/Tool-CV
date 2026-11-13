@@ -54,6 +54,16 @@ Công cụ tạo, quản lý và xuất CV A4 chuyên nghiệp dành cho Kỹ s�
 - Mỗi phiên bản CV ghi được: công ty, vị trí, trạng thái (Chưa gửi / Đã gửi / Phỏng vấn / Có offer / Bị từ chối / Không phản hồi), ngày gửi, link tin tuyển dụng, ghi chú. **Không in ra CV/PDF.**
 - Nút **📋 Theo dõi** mở bảng tổng hợp mọi phiên bản; bấm một dòng để mở nhanh phiên bản đó. Có nút **Xuất CSV** (mở bằng Excel, đúng tiếng Việt).
 - Tên phiên bản trong danh sách chọn hiển thị kèm công ty và trạng thái.
+- Trường **Hạn nộp**: CV chưa gửi mà sắp (≤ 3 ngày) hoặc quá hạn sẽ được xếp lên đầu bảng, tô màu cảnh báo, và nút **📋 Theo dõi (n)** ở đầu trang đổi màu cho bạn thấy ngay.
+
+### 👁 10. Ẩn / hiện nội dung theo từng phiên bản
+- Mỗi phần (Kinh nghiệm, Dự án, Chứng chỉ...), mỗi mục và mỗi gạch đầu dòng có nút mắt **👁**. Bấm để **ẩn khỏi CV** mà không xóa dữ liệu; bấm lại để hiện.
+- Nhờ vậy giữ một bộ nội dung đầy đủ rồi chỉ bật những gì mạnh và hợp với từng JD cho mỗi phiên bản.
+- Mục **Khớp JD** chỉ tính phần đang hiển thị trên CV, nên điểm khớp phản ánh đúng bản sẽ gửi đi.
+
+### 💾 11. Sao lưu & khôi phục
+- Dữ liệu lưu trong `localStorage` của trình duyệt, nên xóa dữ liệu duyệt web là mất. Nút **💾 Sao lưu** xuất **tất cả** phiên bản CV ra một file JSON. Nút này hiện chấm cam khi chưa sao lưu hoặc đã hơn 7 ngày.
+- Để khôi phục, dùng nút **Nhập JSON** và chọn file sao lưu: các phiên bản trong file được **thêm vào**, không ghi đè hay xóa phiên bản hiện có.
 
 ---
 

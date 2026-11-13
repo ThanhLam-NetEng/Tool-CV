@@ -36,10 +36,11 @@
     <!-- Actions Panel -->
     <div style="display: flex; gap: 0.5rem;">
       <button id="btn-tracker" class="btn btn-secondary" title="Bảng theo dõi các CV đã gửi / đang ứng tuyển">📋 Theo dõi</button>
-      <button id="btn-import-json" class="btn btn-secondary" title="Nhập dữ liệu từ file JSON">Nhập JSON</button>
+      <button id="btn-import-json" class="btn btn-secondary" title="Nhập file JSON: một CV lẻ, hoặc file sao lưu (khôi phục toàn bộ)">Nhập JSON</button>
       <input type="file" id="import-file-input" accept=".json">
       
       <button id="btn-export-json" class="btn btn-secondary" title="Xuất dữ liệu CV ra file JSON">Xuất JSON</button>
+      <button id="btn-backup" class="btn btn-secondary" title="Sao lưu TẤT CẢ phiên bản CV ra một file (khôi phục bằng nút Nhập JSON)">💾 Sao lưu</button>
       <button id="btn-reset-default" class="btn btn-secondary" title="Đặt lại dữ liệu gốc của phiên bản này">Reset Gốc</button>
       <button id="btn-export-pdf" class="btn" title="Xuất CV ra file PDF (hoặc phím Ctrl+P)">Xuất PDF</button>
     </div>
@@ -118,7 +119,7 @@
       <div class="tracker-table-wrap">
         <table class="tracker-table">
           <thead>
-            <tr><th>Phiên bản CV</th><th>Công ty</th><th>Vị trí</th><th>Trạng thái</th><th>Ngày gửi</th><th>JD</th></tr>
+            <tr><th>Phiên bản CV</th><th>Công ty</th><th>Vị trí</th><th>Trạng thái</th><th>Hạn nộp</th><th>Ngày gửi</th><th>JD</th></tr>
           </thead>
           <tbody id="tracker-body"></tbody>
         </table>

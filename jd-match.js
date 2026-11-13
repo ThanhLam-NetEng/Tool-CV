@@ -3,7 +3,12 @@
 (function (root) {
   'use strict';
 
-  // [canonical name, [aliases...]] - aliases are matched case-insensitively as whole terms.
+  // [canonical name, [aliases...], options?]
+  //  - aliases are matched case-insensitively as whole terms
+  //  - options.cs:  aliases matched CASE-SENSITIVELY (short acronyms such as AD / IDS / NAS)
+  //  - options.not: phrases that must NOT count (e.g. "azure ad" must not count as plain "Azure")
+  // Keep tools/products that a person may or may not have used (Intune, Defender...) as their own
+  // terms: merging them into a broad group would hide real gaps from the score.
   const TERMS = [
     // --- Networking ---
     ['TCP/IP', ['tcp/ip', 'tcp ip', 'tcpip']],
@@ -16,7 +21,7 @@
     ['STP', ['stp', 'spanning tree', 'spanning-tree']],
     ['DNS', ['dns']],
     ['DHCP', ['dhcp']],
-    ['NAT', ['nat']],
+    ['NAT', [], { cs: ['NAT'] }],
     ['QoS', ['qos']],
     ['MPLS', ['mpls']],
     ['SD-WAN', ['sd-wan', 'sdwan', 'sd wan']],
@@ -29,19 +34,21 @@
     ['MikroTik', ['mikrotik', 'routeros']],
     ['Fortinet', ['fortinet', 'fortigate']],
     ['Palo Alto', ['palo alto', 'pan-os']],
+    ['Aruba / ClearPass (NAC)', ['aruba', 'clearpass', 'cppm']],
     ['Network monitoring', ['network monitoring', 'zabbix', 'prtg', 'nagios', 'solarwinds', 'librenms']],
     ['Packet analysis', ['wireshark', 'tcpdump', 'packet capture', 'pcap']],
     ['Cabling', ['cabling', 'rj45', 'structured cabling', 'cat6', 'patch panel', 'đấu nối', 'bấm cáp']],
     // --- Security / SOC ---
     ['Firewall', ['firewall', 'firewalls', 'ngfw', 'tường lửa']],
-    ['IDS/IPS', ['ids/ips', 'ids', 'ips', 'suricata', 'snort']],
-    ['SIEM', ['siem', 'wazuh', 'splunk', 'qradar', 'elk', 'elastic', 'sentinel', 'graylog']],
-    ['SOC', ['soc', 'security operations', 'security operation center']],
+    ['IDS/IPS', ['ids/ips', 'suricata', 'snort'], { cs: ['IDS', 'IPS'] }],
+    ['SIEM', ['siem', 'wazuh', 'splunk', 'qradar', 'elastic', 'sentinel', 'graylog'], { cs: ['ELK'] }],
+    ['SOC', ['security operations', 'security operation center'], { cs: ['SOC'] }],
     ['Incident response', ['incident response', 'incident handling', 'ứng phó sự cố', 'xử lý sự cố bảo mật']],
     ['Log analysis', ['log analysis', 'log management', 'phân tích log', 'syslog']],
     ['Threat detection', ['threat detection', 'threat hunting', 'threat intelligence', 'cti']],
     ['MITRE ATT&CK', ['mitre', 'att&ck', 'attack framework']],
-    ['EDR / XDR', ['edr', 'xdr', 'endpoint detection', 'crowdstrike', 'sentinelone', 'defender']],
+    ['EDR / XDR', ['edr', 'xdr', 'endpoint detection', 'crowdstrike', 'sentinelone']],
+    ['Microsoft Defender', ['microsoft defender', 'defender for endpoint', 'windows defender', 'defender']],
     ['Antivirus / Endpoint security', ['antivirus', 'anti-virus', 'endpoint security']],
     ['Vulnerability management', ['vulnerability', 'vulnerabilities', 'nessus', 'openvas', 'qualys', 'lỗ hổng']],
     ['Penetration testing', ['penetration testing', 'pentest', 'pen test', 'red team', 'kali']],
@@ -62,24 +69,34 @@
     ['Network+', ['network+', 'comptia network']],
     // --- Systems / IT support ---
     ['Windows Server', ['windows server']],
-    ['Active Directory', ['active directory', 'ad ds', 'group policy', 'gpo', 'ldap']],
+    ['Active Directory', ['active directory', 'ad ds', 'group policy', 'gpo', 'ldap'], { cs: ['AD'], not: ['azure ad'] }],
+    ['Azure AD / Entra ID', ['azure ad', 'azure active directory', 'entra id', 'entra', 'aad']],
+    ['Microsoft Intune', ['intune', 'endpoint manager', 'microsoft endpoint manager', 'memcm']],
+    ['User & access management', ['user account', 'user accounts', 'access permission', 'access permissions', 'permission management', 'access control', 'password reset', 'password resets', 'account management', 'phân quyền', 'quản lý tài khoản']],
+    ['File Server / NAS', ['file server', 'file share', 'file sharing', 'synology', 'qnap', 'ntfs'], { cs: ['NAS'] }],
+    ['Windows (desktop OS)', ['windows'], { not: ['windows server', 'windows defender'] }],
+    ['macOS', ['macos', 'mac os', 'os x', 'macbook']],
     ['Linux', ['linux', 'ubuntu', 'centos', 'debian', 'rhel', 'red hat']],
-    ['Microsoft 365', ['microsoft 365', 'office 365', 'm365', 'o365', 'exchange online', 'intune', 'azure ad', 'entra']],
+    ['Microsoft 365', ['microsoft 365', 'office 365', 'm365', 'o365', 'exchange online', 'microsoft 365 admin center']],
+    ['Adobe Creative Cloud', ['adobe creative cloud', 'adobe cc', 'photoshop', 'illustrator', 'adobe']],
     ['Helpdesk / IT support', ['helpdesk', 'help desk', 'it support', 'service desk', 'technical support', 'hỗ trợ kỹ thuật', 'hỗ trợ người dùng']],
-    ['Ticketing', ['ticket', 'tickets', 'ticketing', 'jira', 'servicenow', 'glpi', 'freshdesk', 'zendesk']],
+    ['Ticketing', ['ticket', 'tickets', 'ticketing', 'jira', 'servicenow', 'glpi', 'freshdesk', 'zendesk', 'servicedesk plus', 'manageengine']],
+    ['SLA', ['sla', 'slas', 'service level']],
     ['ITIL', ['itil']],
     ['Troubleshooting', ['troubleshoot', 'troubleshooting', 'xử lý sự cố', 'khắc phục sự cố']],
     ['Virtualization', ['virtualization', 'virtualisation', 'vmware', 'esxi', 'vsphere', 'hyper-v', 'proxmox', 'virtualbox', 'ảo hóa']],
     ['Backup & DR', ['backup', 'disaster recovery', 'veeam', 'sao lưu']],
     ['Monitoring', ['monitoring', 'giám sát', 'grafana', 'prometheus']],
-    ['Remote support', ['remote support', 'anydesk', 'teamviewer', 'rdp']],
-    ['Hardware & OS setup', ['hardware', 'imaging', 'sccm', 'cài đặt hệ điều hành', 'cài đặt phần mềm']],
-    ['WMS / ERP', ['wms', 'erp', 'sap']],
+    ['Remote support', ['remote support', 'anydesk', 'teamviewer', 'ultraviewer', 'rdp', 'remote desktop']],
+    ['Hardware & OS setup', ['hardware', 'cài đặt hệ điều hành', 'cài đặt phần mềm', 'install and configure', 'installing and configuring']],
+    ['Device / software deployment', ['device management', 'software deployment', 'software distribution', 'mdm', 'sccm', 'imaging']],
+    ['WMS', ['wms', 'warehouse management']],
+    ['ERP / business systems', ['erp', 'odoo', 'seller center', 'netsuite', 'business system', 'business systems'], { cs: ['SAP'] }],
     // --- Cloud / DevOps / scripting ---
     ['AWS', ['aws', 'amazon web services']],
-    ['Azure', ['azure']],
+    ['Azure', ['azure'], { not: ['azure ad', 'azure active directory'] }],
     ['GCP', ['gcp', 'google cloud']],
-    ['Cloud', ['cloud']],
+    ['Cloud', ['cloud'], { not: ['creative cloud'] }],
     ['Docker', ['docker', 'container', 'containers']],
     ['Kubernetes', ['kubernetes', 'k8s']],
     ['Terraform', ['terraform']],
@@ -91,8 +108,8 @@
     ['PowerShell', ['powershell']],
     ['SQL', ['sql', 'mysql', 'postgresql', 'mssql']],
     ['Automation', ['automation', 'scripting', 'tự động hóa']],
-    ['Documentation', ['documentation', 'tài liệu hóa', 'báo cáo', 'reporting']],
-    ['English', ['english', 'tiếng anh']],
+    ['Documentation', ['documentation', 'tài liệu hóa', 'báo cáo', 'reporting', 'user guide', 'user guides', 'sop', 'knowledge base', 'hướng dẫn sử dụng']],
+    ['English', ['english', 'tiếng anh', 'toeic', 'ielts', 'vstep', 'toefl']],
   ];
 
   // Acronym-looking words that are NOT useful keywords.
@@ -100,6 +117,7 @@
     'AND', 'THE', 'FOR', 'WITH', 'YOU', 'OR', 'OF', 'TO', 'IN', 'ON', 'AT', 'AN', 'AS', 'BY', 'IF', 'IS', 'IT', 'NO', 'OK',
     'VN', 'HCM', 'HN', 'TP', 'VND', 'USD', 'KPI', 'CV', 'CEO', 'CTO', 'HR', 'PM', 'AM', 'ID', 'UI', 'UX', 'NA', 'TBD',
     'ASAP', 'FAQ', 'PDF', 'LTD', 'JSC', 'CO', 'INC', 'II', 'III', 'IV', 'USA', 'UK', 'EU', 'APAC', 'NOTE', 'BHXH', 'BHYT', 'ISO',
+    'JOB', 'TOOLS', 'TOOL', 'DESCRIPTION', 'REQUIREMENTS', 'TECHNOLOGIES', 'BENEFITS', 'SKILLS', 'RESPONSIBILITIES', 'ADMIN', 'PLUS',
   ]);
 
   function escapeRegex(str) {
@@ -112,24 +130,46 @@
     return new RegExp('(?<![a-z0-9+#])' + body + '(?![a-z0-9+#])', 'g');
   }
 
-  const COMPILED = TERMS.map(([name, aliases]) => ({
-    name,
-    regexes: aliases.map(termRegex),
-  }));
+  // Case-sensitive variant (used as-is on the original text)
+  function termRegexCS(alias) {
+    const body = escapeRegex(alias).replace(/\s+/g, '\\s+');
+    return new RegExp('(?<![A-Za-z0-9+#])' + body + '(?![A-Za-z0-9+#])', 'g');
+  }
 
-  // Count distinct mentions: when several aliases hit the same spot (e.g. "ids/ips" also contains
-  // "ids" and "ips") the overlapping hits are merged and counted once.
-  function countTerm(textLower, entry) {
-    const spans = [];
-    for (const re of entry.regexes) {
+  const COMPILED = TERMS.map(([name, aliases, opts]) => {
+    const o = opts || {};
+    return {
+      name,
+      regexes: aliases.map(termRegex),
+      csRegexes: (o.cs || []).map(termRegexCS),
+      excludes: (o.not || []).map(termRegex),
+    };
+  });
+
+  function collectSpans(regexes, text, into) {
+    for (const re of regexes) {
       re.lastIndex = 0;
       let m;
-      while ((m = re.exec(textLower)) !== null) {
-        spans.push([m.index, m.index + m[0].length]);
+      while ((m = re.exec(text)) !== null) {
+        into.push([m.index, m.index + m[0].length]);
         if (m[0].length === 0) re.lastIndex++;
       }
     }
+    return into;
+  }
+
+  // Count distinct mentions: when several aliases hit the same spot (e.g. "ids/ips" also contains
+  // "ids") the overlapping hits are merged and counted once. Hits that sit inside an excluded
+  // phrase ("azure ad" for Azure, "creative cloud" for Cloud) are dropped.
+  function countTerm(text, textLower, entry) {
+    let spans = collectSpans(entry.regexes, textLower, []);
+    collectSpans(entry.csRegexes, text, spans);
     if (!spans.length) return 0;
+    if (entry.excludes.length) {
+      const bad = collectSpans(entry.excludes, textLower, []);
+      spans = spans.filter(([a, b]) => !bad.some(([x, y]) => a < y && x < b));
+      if (!spans.length) return 0;
+    }
     spans.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
     let count = 1;
     let end = spans[0][1];
@@ -197,11 +237,11 @@
     let totalW = 0;
     let matchedW = 0;
     COMPILED.forEach(entry => {
-      const freq = countTerm(jdLower, entry);
+      const freq = countTerm(jd, jdLower, entry);
       if (!freq) return;
       const w = weightOf(freq);
       totalW += w;
-      if (countTerm(cvLower, entry) > 0) {
+      if (countTerm(cv, cvLower, entry) > 0) {
         matchedW += w;
         result.matched.push({ term: entry.name, freq });
       } else {
@@ -216,9 +256,10 @@
 
     // Acronyms in the JD that the dictionary does not know (informational only, not scored).
     const known = new Set();
-    TERMS.forEach(([name, aliases]) => {
+    TERMS.forEach(([name, aliases, opts]) => {
       known.add(name.toUpperCase());
       aliases.forEach(a => known.add(a.toUpperCase()));
+      ((opts && opts.cs) || []).forEach(a => known.add(a.toUpperCase()));
     });
     const seen = new Map();
     (jd.match(/(?<![A-Za-z0-9\/&+#.-])[A-Z][A-Z0-9]{1,7}(?:[-\/&][A-Z][A-Z0-9]{1,7})*(?![A-Za-z0-9+#]|[-\/&][A-Za-z0-9]|\.[A-Za-z0-9])/g) || []).forEach(tok => {
