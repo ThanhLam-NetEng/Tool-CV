@@ -144,15 +144,30 @@ function formatUrl(url) {
   return 'https://' + url;
 }
 
+// A4 height in CSS px (297mm @ 96dpi). The on-screen .page only has min-height,
+// so its clientHeight grows with the content and cannot be used as the A4 limit.
+const A4_HEIGHT_PX = Math.round(297 * 96 / 25.4);
+const FALLBACK_NAME = 'Ứng viên';
+
 // Helper to escape HTML characters safely for tags and text
 function escapeHtml(str) {
-  if (typeof str !== 'string') return str || '';
+  if (str === null || str === undefined) return '';
+  if (typeof str !== 'string') str = String(str);
   return str
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+// Allow only simple inline formatting tags in rich text (bullets, summary).
+// Everything else is escaped, so stray '<' or imported JSON cannot break the page.
+function sanitizeRichHtml(str) {
+  if (str === null || str === undefined) return '';
+  const escaped = escapeHtml(String(str));
+  return escaped
+    .replace(/&lt;(\/?)(strong|b|em|i|u|br|sub|sup|code)\s*(\/?)&gt;/gi, '<$1$2$3>');
 }
 
 // Migration helper for backward compatibility with older saved profiles
@@ -223,6 +238,29 @@ function migrateData(data) {
   if (!Array.isArray(data.skills)) data.skills = [];
   if (!Array.isArray(data.languages)) data.languages = [];
   if (!Array.isArray(data.customSections)) data.customSections = [];
+
+  // Normalise nested items so a hand-edited / imported JSON cannot crash the editor
+  const toBullets = b => (Array.isArray(b) ? b : []).map(x => (typeof x === 'string' ? x : String(x ?? '')));
+  data.experience.forEach(e => { e.bullets = toBullets(e.bullets); });
+  data.projects.forEach(p => {
+    p.bullets = toBullets(p.bullets);
+    p.tags = Array.isArray(p.tags) ? p.tags.map(String) : [];
+  });
+  data.customSections.forEach(c => { c.bullets = toBullets(c.bullets); });
+  data.skills.forEach(c => { if (!Array.isArray(c.items)) c.items = []; });
+  data.header.contacts = data.header.contacts.filter(c => c && typeof c === 'object');
+
+  // Make sure every known section appears in exactly one column order
+  const known = ['experience', 'projects', 'certifications', 'education', 'skills', 'languages', 'customSections'];
+  const dedupe = arr => arr.filter((k, i) => known.includes(k) && arr.indexOf(k) === i);
+  data.theme.sectionOrderMain = dedupe(data.theme.sectionOrderMain);
+  data.theme.sectionOrderSide = dedupe(data.theme.sectionOrderSide)
+    .filter(k => !data.theme.sectionOrderMain.includes(k));
+  known.forEach(k => {
+    if (!data.theme.sectionOrderMain.includes(k) && !data.theme.sectionOrderSide.includes(k)) {
+      data.theme.sectionOrderSide.push(k);
+    }
+  });
 }
 
 // Application State
@@ -248,7 +286,8 @@ window.addEventListener('DOMContentLoaded', () => {
 
 // Load profiles from LocalStorage or initialize with default
 function loadProfilesFromStorage() {
-  const stored = localStorage.getItem('cv_builder_profiles');
+  let stored = null;
+  try { stored = localStorage.getItem('cv_builder_profiles'); } catch (e) { stored = null; }
   if (stored) {
     try {
       appState = JSON.parse(stored);
@@ -257,6 +296,9 @@ function loadProfilesFromStorage() {
       });
     } catch (e) {
       console.error('Error parsing stored profiles', e);
+      // Keep the unreadable data instead of silently overwriting it
+      try { localStorage.setItem('cv_builder_profiles_backup', stored); } catch (_) {}
+      appState = { profiles: {}, currentProfileId: '' };
       initializeDefaultProfile();
     }
   } else {
@@ -275,7 +317,7 @@ function initializeDefaultProfile() {
   const id = 'profile_' + Date.now();
   appState.profiles = {};
   appState.profiles[id] = {
-    name: 'Phạm Thanh Lâm (Default)',
+    name: 'CV mặc định',
     data: JSON.parse(JSON.stringify(defaultCvData))
   };
   appState.currentProfileId = id;
@@ -283,7 +325,12 @@ function initializeDefaultProfile() {
 }
 
 function saveProfilesToStorage() {
-  localStorage.setItem('cv_builder_profiles', JSON.stringify(appState));
+  try {
+    localStorage.setItem('cv_builder_profiles', JSON.stringify(appState));
+  } catch (e) {
+    // Quota exceeded / storage blocked: keep the app working in memory
+    console.error('Cannot save profiles to localStorage', e);
+  }
 }
 
 // Get active CV data with migration check
@@ -365,7 +412,9 @@ function setupEventListeners() {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(activeProfile.data, null, 2));
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute("href", dataStr);
-    const filename = activeProfile.name.toLowerCase().replace(/[^a-z0-9]/g, '_') + '_data.json';
+    const slug = activeProfile.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/gi, 'd')
+      .toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'cv';
+    const filename = slug + '_data.json';
     downloadAnchor.setAttribute("download", filename);
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
@@ -425,7 +474,7 @@ function setupEventListeners() {
   // Export PDF
   document.getElementById('btn-export-pdf').addEventListener('click', () => {
     const activeData = getActiveData();
-    const userName = activeData.header && activeData.header.name ? activeData.header.name.trim() : 'Phạm Thanh Lâm';
+    const userName = activeData.header && activeData.header.name ? activeData.header.name.trim() : FALLBACK_NAME;
     document.title = `CV - ${userName}`;
     window.print();
   });
@@ -439,35 +488,40 @@ function setupEventListeners() {
   }
 }
 
-// Algorithm to automatically shrink font size and adjust spacing to fit 1 A4 page
+// Algorithm to automatically shrink font size and adjust spacing to fit 1 A4 page.
+// Only changes anything when the CV really overflows; tries the gentlest option first.
 function autoFitToOnePage() {
   const data = getActiveData();
   const preview = document.getElementById('preview-cv');
   if (!preview) return;
 
-  // Step 1: Switch spacing mode to compact if normal
-  if (data.theme.spacingMode === 'normal') {
-    data.theme.spacingMode = 'compact';
-    updateDataAndPreview();
+  const MIN_SIZE = 7.5;
+  const overflows = () => preview.scrollHeight > A4_HEIGHT_PX + 2;
+  const apply = () => { updatePreview(); };
+
+  apply();
+  if (overflows()) {
+    const modes = ['normal', 'compact', 'tight'];
+    let modeIdx = Math.max(0, modes.indexOf(data.theme.spacingMode));
+    for (; modeIdx < modes.length; modeIdx++) {
+      data.theme.spacingMode = modes[modeIdx];
+      apply();
+      if (!overflows()) break;
+      // Shrink the font in 0.2pt steps, but keep it readable until the tightest mode
+      const floor = modes[modeIdx] === 'tight' ? MIN_SIZE : 8.8;
+      let size = parseFloat(data.theme.fontSize) || 9.8;
+      while (overflows() && size - 0.2 >= floor - 1e-9) {
+        size = Math.round((size - 0.2) * 10) / 10;
+        data.theme.fontSize = size.toFixed(1);
+        apply();
+      }
+      if (!overflows()) break;
+    }
   }
 
-  // Step 2: Lower font size progressively until scrollHeight <= clientHeight or fontSize <= 7.5
-  let currentSize = parseFloat(data.theme.fontSize) || 9.8;
-  let attempts = 0;
-  while (preview.scrollHeight > preview.clientHeight + 10 && currentSize > 7.5 && attempts < 15) {
-    currentSize -= 0.3;
-    data.theme.fontSize = currentSize.toFixed(1);
-    preview.style.fontSize = data.theme.fontSize + 'pt';
-    attempts++;
-  }
-
-  // Step 3: Switch to tight spacing mode if still overflowing
-  if (preview.scrollHeight > preview.clientHeight + 10 && data.theme.spacingMode !== 'tight') {
-    data.theme.spacingMode = 'tight';
-  }
-
-  updateDataAndPreview();
+  saveProfilesToStorage();
   renderEditor();
+  updatePreview();
 }
 
 function renderProfileDropdown() {
@@ -501,7 +555,7 @@ function renderEditor() {
   editor.innerHTML = '';
 
   // Update document title dynamically
-  const currentUserName = data.header && data.header.name ? data.header.name.trim() : 'Phạm Thanh Lâm';
+  const currentUserName = data.header && data.header.name ? data.header.name.trim() : FALLBACK_NAME;
   document.title = `CV - ${currentUserName}`;
 
   // 1. Theme and Fonts Section
@@ -816,7 +870,7 @@ function renderEditor() {
   const secHeader = createFormSection('Thông tin cá nhân');
   secHeader.appendChild(createTextInput('Họ và Tên', data.header.name, val => {
     data.header.name = val;
-    document.title = `CV - ${val.trim() || 'Phạm Thanh Lâm'}`;
+    document.title = `CV - ${val.trim() || FALLBACK_NAME}`;
     updateDataAndPreview();
   }));
   secHeader.appendChild(createTextInput('Chức danh / Chuyên môn', data.header.role, val => {
@@ -846,7 +900,7 @@ function renderEditor() {
     card.className = 'item-card';
     card.innerHTML = `
       <div class="card-header">
-        <span>Thông tin #${index + 1}: ${contact.label || contact.value || 'Trống'}</span>
+        <span>Thông tin #${index + 1}: ${escapeHtml(contact.label || contact.value || 'Trống')}</span>
         <div class="card-actions">
           <button type="button" class="btn-icon btn-move-up" title="Di chuyển lên" ${index === 0 ? 'disabled' : ''}>↑</button>
           <button type="button" class="btn-icon btn-move-down" title="Di chuyển xuống" ${index === data.header.contacts.length - 1 ? 'disabled' : ''}>↓</button>
@@ -936,7 +990,7 @@ function renderEditor() {
     card.className = 'item-card';
     card.innerHTML = `
       <div class="card-header">
-        <span>Kinh nghiệm #${index + 1}: ${item.company || 'Trống'}</span>
+        <span>Kinh nghiệm #${index + 1}: ${escapeHtml(item.company || 'Trống')}</span>
         <div class="card-actions">
           <button type="button" class="btn-icon btn-move-up" title="Di chuyển lên" ${index === 0 ? 'disabled' : ''}>↑</button>
           <button type="button" class="btn-icon btn-move-down" title="Di chuyển xuống" ${index === data.experience.length - 1 ? 'disabled' : ''}>↓</button>
@@ -1034,7 +1088,7 @@ function renderEditor() {
     card.className = 'item-card';
     card.innerHTML = `
       <div class="card-header">
-        <span>Dự án #${index + 1}: ${item.name || 'Trống'}</span>
+        <span>Dự án #${index + 1}: ${escapeHtml(item.name || 'Trống')}</span>
         <div class="card-actions">
           <button type="button" class="btn-icon btn-move-up" title="Di chuyển lên" ${index === 0 ? 'disabled' : ''}>↑</button>
           <button type="button" class="btn-icon btn-move-down" title="Di chuyển xuống" ${index === data.projects.length - 1 ? 'disabled' : ''}>↓</button>
@@ -1133,7 +1187,7 @@ function renderEditor() {
     card.className = 'item-card';
     card.innerHTML = `
       <div class="card-header">
-        <span>Chứng chỉ #${index + 1}: ${item.name || 'Trống'}</span>
+        <span>Chứng chỉ #${index + 1}: ${escapeHtml(item.name || 'Trống')}</span>
         <div class="card-actions">
           <button type="button" class="btn-icon btn-move-up" title="Di chuyển lên" ${index === 0 ? 'disabled' : ''}>↑</button>
           <button type="button" class="btn-icon btn-move-down" title="Di chuyển xuống" ${index === data.certifications.length - 1 ? 'disabled' : ''}>↓</button>
@@ -1226,7 +1280,7 @@ function renderEditor() {
     card.className = 'item-card';
     card.innerHTML = `
       <div class="card-header">
-        <span>Học vấn #${index + 1}: ${item.school || 'Trống'}</span>
+        <span>Học vấn #${index + 1}: ${escapeHtml(item.school || 'Trống')}</span>
         <div class="card-actions">
           <button type="button" class="btn-icon btn-move-up" title="Di chuyển lên" ${index === 0 ? 'disabled' : ''}>↑</button>
           <button type="button" class="btn-icon btn-move-down" title="Di chuyển xuống" ${index === data.education.length - 1 ? 'disabled' : ''}>↓</button>
@@ -1334,7 +1388,7 @@ function renderEditor() {
 
     catDiv.innerHTML = `
       <div class="skill-cat-header">
-        <input type="text" class="input-inline input-cat-name" value="${skillCat.category}" title="Tên nhóm kỹ năng">
+        <input type="text" class="input-inline input-cat-name" value="${escapeHtml(skillCat.category)}" title="Tên nhóm kỹ năng">
         <div class="card-actions">
           <button type="button" class="btn-icon btn-move-up" title="Di chuyển lên" ${catIdx === 0 ? 'disabled' : ''}>↑</button>
           <button type="button" class="btn-icon btn-move-down" title="Di chuyển xuống" ${catIdx === data.skills.length - 1 ? 'disabled' : ''}>↓</button>
@@ -1342,7 +1396,7 @@ function renderEditor() {
         </div>
       </div>
       <div class="form-group mb-1">
-        <textarea class="form-control input-cat-skills" rows="2" placeholder="VD: TCP/IP*, Routing/Switching*, SD-WAN, Cisco IOS">${textVal}</textarea>
+        <textarea class="form-control input-cat-skills" rows="2" placeholder="VD: TCP/IP*, Routing/Switching*, SD-WAN, Cisco IOS">${escapeHtml(textVal)}</textarea>
       </div>
       <div class="helper-text">Liệt kê các kỹ năng phân cách bởi dấu phẩy. Thêm dấu <strong>*</strong> vào sau để in đậm (VD: <code>TCP/IP*, OSPF</code>).</div>
     `;
@@ -1428,10 +1482,10 @@ function renderEditor() {
     row.className = 'form-group-row items-row-align mb-1';
     row.innerHTML = `
       <div style="flex: 2;">
-        <input type="text" class="form-control lang-name-input" placeholder="Ngôn ngữ" value="${item.name}">
+        <input type="text" class="form-control lang-name-input" placeholder="Ngôn ngữ" value="${escapeHtml(item.name)}">
       </div>
       <div style="flex: 2;">
-        <input type="text" class="form-control lang-level-input" placeholder="Trình độ (VD: Bản xứ, IELTS 6.5)" value="${item.level}">
+        <input type="text" class="form-control lang-level-input" placeholder="Trình độ (VD: Bản xứ, IELTS 6.5)" value="${escapeHtml(item.level)}">
       </div>
       <div class="card-actions" style="flex: 0.8; justify-content: flex-end;">
         <button type="button" class="btn-icon btn-move-up" title="Di chuyển lên" ${index === 0 ? 'disabled' : ''}>↑</button>
@@ -1500,7 +1554,7 @@ function renderEditor() {
     card.className = 'item-card';
     card.innerHTML = `
       <div class="card-header">
-        <span>Mục tùy chỉnh #${secIdx + 1}: ${cSec.title || 'Trống'}</span>
+        <span>Mục tùy chỉnh #${secIdx + 1}: ${escapeHtml(cSec.title || 'Trống')}</span>
         <div class="card-actions">
           <button type="button" class="btn-icon btn-move-up" title="Di chuyển lên" ${secIdx === 0 ? 'disabled' : ''}>↑</button>
           <button type="button" class="btn-icon btn-move-down" title="Di chuyển xuống" ${secIdx === data.customSections.length - 1 ? 'disabled' : ''}>↓</button>
@@ -1712,7 +1766,7 @@ function createBulletListInput(label, bullets, onUpdate) {
       itemRow.className = 'bullet-item-row';
       itemRow.innerHTML = `
         <div style="flex: 1;">
-          <textarea class="form-control bullet-text-input" rows="2" placeholder="Nhập nội dung gạch đầu dòng...">${bullet}</textarea>
+          <textarea class="form-control bullet-text-input" rows="2" placeholder="Nhập nội dung gạch đầu dòng...">${escapeHtml(bullet)}</textarea>
         </div>
         <div class="bullet-row-actions">
           <button type="button" class="btn-icon btn-bullet-up" ${idx === 0 ? 'disabled' : ''}>↑</button>
@@ -1780,7 +1834,7 @@ function updatePreview() {
   if (!preview) return;
 
   // Sync document title to user's name
-  const userName = data.header && data.header.name ? data.header.name.trim() : 'Phạm Thanh Lâm';
+  const userName = data.header && data.header.name ? data.header.name.trim() : FALLBACK_NAME;
   document.title = `CV - ${userName}`;
 
   // Set Template & Spacing Density Class
@@ -1839,14 +1893,14 @@ function updatePreview() {
         headerCtHtml += `
           <div class="ci">
             <span class="dot"></span>
-            <a href="${formattedLink}" target="_blank" rel="noopener">${item.value}</a>
+            <a href="${escapeHtml(formattedLink)}" target="_blank" rel="noopener">${escapeHtml(item.value)}</a>
           </div>
         `;
       } else {
         headerCtHtml += `
           <div class="ci">
             <span class="dot"></span>
-            <span>${item.label ? `<strong style="font-weight:500;color:var(--t);">${item.label}:</strong> ` : ''}${item.value}</span>
+            <span>${item.label ? `<strong style="font-weight:500;color:var(--t);">${escapeHtml(item.label)}:</strong> ` : ''}${escapeHtml(item.value)}</span>
           </div>
         `;
       }
@@ -1856,9 +1910,9 @@ function updatePreview() {
   const headerHtml = `
     <header class="hd">
       <div>
-        <div class="hd-name">${data.header.name || ''}</div>
-        <div class="hd-role">${data.header.role || ''}</div>
-        <p class="hd-sum">${data.header.summary || ''}</p>
+        <div class="hd-name">${escapeHtml(data.header.name)}</div>
+        <div class="hd-role">${escapeHtml(data.header.role)}</div>
+        <p class="hd-sum">${sanitizeRichHtml(data.header.summary)}</p>
       </div>
       <div class="hd-ct">
         ${headerCtHtml}
@@ -1873,23 +1927,23 @@ function updatePreview() {
     data.experience.forEach(exp => {
       let bulletsHtml = '';
       if (exp.bullets && exp.bullets.length > 0) {
-        bulletsHtml = `<ul class="bl">` + exp.bullets.map(b => `<li>${b}</li>`).join('') + `</ul>`;
+        bulletsHtml = `<ul class="bl">` + exp.bullets.map(b => `<li>${sanitizeRichHtml(b)}</li>`).join('') + `</ul>`;
       }
       expItemsHtml += `
         <div class="en">
           <div class="en-hd">
-            <div class="en-t">${exp.company}</div>
-            <div class="en-p">${exp.date}</div>
+            <div class="en-t">${escapeHtml(exp.company)}</div>
+            <div class="en-p">${escapeHtml(exp.date)}</div>
           </div>
-          <div class="en-r">${exp.role}</div>
-          <div class="en-l">${exp.location}</div>
+          <div class="en-r">${escapeHtml(exp.role)}</div>
+          <div class="en-l">${escapeHtml(exp.location)}</div>
           ${bulletsHtml}
         </div>
       `;
     });
     expHtml = `
       <div class="sec">
-        <div class="sec-t">${titles.experience || 'Experience'}</div>
+        <div class="sec-t">${escapeHtml(titles.experience || 'Experience')}</div>
         ${expItemsHtml}
       </div>
     `;
@@ -1902,20 +1956,20 @@ function updatePreview() {
     data.projects.forEach(proj => {
       let bulletsHtml = '';
       if (proj.bullets && proj.bullets.length > 0) {
-        bulletsHtml = `<ul class="bl">` + proj.bullets.map(b => `<li>${b}</li>`).join('') + `</ul>`;
+        bulletsHtml = `<ul class="bl">` + proj.bullets.map(b => `<li>${sanitizeRichHtml(b)}</li>`).join('') + `</ul>`;
       }
       let tagsHtml = '';
       if (proj.tags && proj.tags.length > 0) {
-        tagsHtml = `<div class="tags">` + proj.tags.map(t => `<span class="tag">${t}</span>`).join('') + `</div>`;
+        tagsHtml = `<div class="tags">` + proj.tags.map(t => `<span class="tag">${escapeHtml(t)}</span>`).join('') + `</div>`;
       }
       projItemsHtml += `
         <div class="en">
           <div class="en-hd">
             <div class="en-t">
-              ${proj.name}
-              ${proj.subtitle ? `<span class="en-tn">— ${proj.subtitle}</span>` : ''}
+              ${escapeHtml(proj.name)}
+              ${proj.subtitle ? `<span class="en-tn">— ${escapeHtml(proj.subtitle)}</span>` : ''}
             </div>
-            <div class="en-p">${proj.date}</div>
+            <div class="en-p">${escapeHtml(proj.date)}</div>
           </div>
           ${bulletsHtml}
           ${tagsHtml}
@@ -1924,7 +1978,7 @@ function updatePreview() {
     });
     projHtml = `
       <div class="sec">
-        <div class="sec-t">${titles.projects || 'Projects'}</div>
+        <div class="sec-t">${escapeHtml(titles.projects || 'Projects')}</div>
         ${projItemsHtml}
       </div>
     `;
@@ -1939,16 +1993,16 @@ function updatePreview() {
       certItemsHtml += `
         <div class="cert-item" style="color:var(--m);display:flex;justify-content:space-between;align-items:baseline;gap:0.5rem;margin-bottom:0.18rem;">
           ${formattedLink ? 
-            `<a href="${formattedLink}" target="_blank" rel="noopener" style="color:var(--t);font-weight:500;text-decoration:underline;text-underline-offset:2px;text-decoration-color:var(--b);">${cert.name}</a>` :
-            `<span style="color:var(--t);font-weight:500;">${cert.name}</span>`
+            `<a href="${escapeHtml(formattedLink)}" target="_blank" rel="noopener" style="color:var(--t);font-weight:500;text-decoration:underline;text-underline-offset:2px;text-decoration-color:var(--b);">${escapeHtml(cert.name)}</a>` :
+            `<span style="color:var(--t);font-weight:500;">${escapeHtml(cert.name)}</span>`
           }
-          <span class="cert-date" style="font-family:'DM Mono',monospace;color:var(--m2);white-space:nowrap;">${cert.issuer} · ${cert.date}</span>
+          <span class="cert-date" style="font-family:'DM Mono',monospace;color:var(--m2);white-space:nowrap;">${[cert.issuer, cert.date].filter(Boolean).map(escapeHtml).join(' · ')}</span>
         </div>
       `;
     });
     certHtml = `
       <div class="sec">
-        <div class="sec-t">${titles.certifications || 'Certifications'}</div>
+        <div class="sec-t">${escapeHtml(titles.certifications || 'Certifications')}</div>
         <div style="display:flex;flex-direction:column;gap:0.12rem;">
           ${certItemsHtml}
         </div>
@@ -1963,15 +2017,15 @@ function updatePreview() {
     data.education.forEach(edu => {
       eduItemsHtml += `
         <div style="margin-bottom: 0.4rem;">
-          <div class="edu-s">${edu.school || ''}</div>
-          <div class="edu-m">${edu.degree || ''}</div>
-          <div class="edu-g">${edu.details || ''}</div>
+          <div class="edu-s">${escapeHtml(edu.school)}</div>
+          <div class="edu-m">${escapeHtml(edu.degree)}</div>
+          <div class="edu-g">${escapeHtml(edu.details)}</div>
         </div>
       `;
     });
     eduHtml = `
       <div class="sec">
-        <div class="sec-t">${titles.education || 'Education'}</div>
+        <div class="sec-t">${escapeHtml(titles.education || 'Education')}</div>
         ${eduItemsHtml}
       </div>
     `;
@@ -2055,12 +2109,14 @@ function updatePreview() {
         }
       }
     });
-    skillsHtml = `
+    if (skillCatsHtml) {
+      skillsHtml = `
       <div class="sec">
-        <div class="sec-t">${titles.skills || 'Skills'}</div>
+        <div class="sec-t">${escapeHtml(titles.skills || 'Skills')}</div>
         ${skillCatsHtml}
       </div>
     `;
+    }
   }
 
   // Languages HTML (Sidebar)
@@ -2068,12 +2124,12 @@ function updatePreview() {
   if (data.languages && data.languages.length > 0) {
     const langItemsHtml = data.languages.map(l => `
       <div class="lang">
-        <span class="ln">${l.name}</span><span class="ll">${l.level}</span>
+        <span class="ln">${escapeHtml(l.name)}</span><span class="ll">${escapeHtml(l.level)}</span>
       </div>
     `).join('');
     langHtml = `
       <div class="sec">
-        <div class="sec-t">${titles.languages || 'Languages'}</div>
+        <div class="sec-t">${escapeHtml(titles.languages || 'Languages')}</div>
         ${langItemsHtml}
       </div>
     `;
@@ -2086,11 +2142,11 @@ function updatePreview() {
       if (!cSec.title) return;
       let bulletsHtml = '';
       if (cSec.bullets && cSec.bullets.length > 0) {
-        bulletsHtml = `<ul class="bl">` + cSec.bullets.map(b => `<li>${b}</li>`).join('') + `</ul>`;
+        bulletsHtml = `<ul class="bl">` + cSec.bullets.map(b => `<li>${sanitizeRichHtml(b)}</li>`).join('') + `</ul>`;
       }
       customHtml += `
         <div class="sec">
-          <div class="sec-t">${cSec.title}</div>
+          <div class="sec-t">${escapeHtml(cSec.title)}</div>
           ${bulletsHtml}
         </div>
       `;
@@ -2136,9 +2192,9 @@ function updatePreview() {
     const statusElem = document.getElementById('a4-page-status');
     if (pageElem && statusElem) {
       const actualPx = pageElem.scrollHeight;
-      const a4Px = pageElem.clientHeight || 1122; // 297mm standard container height
+      const a4Px = A4_HEIGHT_PX; // 297mm standard page height
       
-      if (actualPx > a4Px + 15) {
+      if (actualPx > a4Px + 2) {
         const pct = Math.round((actualPx / a4Px) * 100);
         statusElem.textContent = `⚠️ Tràn A4 (~${pct}%)`;
         statusElem.className = 'a4-status-badge over';
@@ -2176,7 +2232,7 @@ function setupZoom() {
   });
 
   document.getElementById('btn-zoom-reset').addEventListener('click', () => {
-    zoomLevel = 0.85;
+    zoomLevel = 1;
     applyZoom();
   });
 
