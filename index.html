@@ -81,6 +81,7 @@
         <div style="display: flex; align-items: center; gap: 0.5rem;">
           <span style="font-size: 0.8rem; font-weight: 500; color: var(--app-text-muted);">A4 LIVE PREVIEW</span>
           <div id="a4-page-status" class="a4-status-badge fit" title="Trạng thái độ dài CV so với 1 trang A4">✓ Đúng 1 trang A4</div>
+          <button id="lint-badge" type="button" class="a4-status-badge lint-badge fit" hidden>🩺</button>
           <button id="btn-auto-fit-page" class="btn btn-secondary btn-sm" style="font-size: 0.72rem; padding: 0.2rem 0.5rem;" title="Tự động căn chỉnh cỡ chữ & khoảng cách dồn khít 1 trang A4">⚡ Dồn vừa 1 Trang A4</button>
         </div>
         
@@ -130,6 +131,7 @@
 
   <!-- Application Logic -->
   <script src="jd-match.js"></script>
+  <script src="cv-lint.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

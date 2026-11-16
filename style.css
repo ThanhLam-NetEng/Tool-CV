@@ -1548,3 +1548,24 @@ ul.bl li strong {
 @media (max-width: 1240px) {
   .app-header { flex-wrap: wrap; row-gap: 0.5rem; }
 }
+
+/* Quality check */
+.lint-badge { border: 1px solid transparent; cursor: pointer; font-family: inherit; }
+.lint-badge:hover { filter: brightness(1.15); }
+.lint-summary { font-size: 0.8rem; font-weight: 600; margin-bottom: 0.5rem; }
+.lint-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+.lint-item { border: 1px solid var(--app-border); border-left-width: 3px; border-radius: 6px; padding: 0.45rem 0.6rem; background: var(--app-input-bg); }
+.lint-error { border-left-color: #ef4444; }
+.lint-warn { border-left-color: #f59e0b; }
+.lint-info { border-left-color: #38bdf8; }
+.lint-msg { font-size: 0.8rem; color: var(--app-text); }
+.lint-where { font-size: 0.7rem; color: var(--app-text-muted); margin-top: 0.15rem; }
+.lint-tip { font-size: 0.72rem; color: #5eead4; margin-top: 0.2rem; }
+
+/* Follow-up helper */
+.follow-box { border: 1px solid var(--app-border); border-radius: 8px; padding: 0.6rem 0.7rem; margin: 0.25rem 0 0.8rem; background: rgba(59, 130, 246, 0.06); }
+.follow-box.is-due { border-color: rgba(245, 158, 11, 0.55); background: rgba(245, 158, 11, 0.08); }
+.follow-title { font-size: 0.8rem; font-weight: 600; margin-bottom: 0.45rem; }
+.follow-box.is-due .follow-title { color: #fbbf24; }
+.follow-preview { font-size: 0.75rem; font-family: inherit; resize: vertical; }
+.follow-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.45rem 0 0.3rem; }

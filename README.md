@@ -65,6 +65,18 @@ Công cụ tạo, quản lý và xuất CV A4 chuyên nghiệp dành cho Kỹ s�
 - Dữ liệu lưu trong `localStorage` của trình duyệt, nên xóa dữ liệu duyệt web là mất. Nút **💾 Sao lưu** xuất **tất cả** phiên bản CV ra một file JSON. Nút này hiện chấm cam khi chưa sao lưu hoặc đã hơn 7 ngày.
 - Để khôi phục, dùng nút **Nhập JSON** và chọn file sao lưu: các phiên bản trong file được **thêm vào**, không ghi đè hay xóa phiên bản hiện có.
 
+### 🩺 12. Kiểm tra chất lượng CV
+- Huy hiệu **🩺** cạnh trạng thái A4 cho biết CV đang có bao nhiêu lỗi / chỗ nên sửa / gợi ý; bấm vào để xem chi tiết.
+- Soát: thiếu tên, email hoặc SĐT sai định dạng, câu mở đầu yếu ("Responsible for", "Helped", "Tham gia"...), dòng quá dài hoặc quá ngắn, nội dung trùng lặp, ít dòng có con số, dấu chấm cuối dòng lệch nhau, kiểu ngày tháng không đồng nhất.
+- Chạy offline, tự cập nhật khi sửa, chỉ xét phần đang hiện trên CV.
+
+### ✉️ 13. Nhắc follow-up
+- CV ở trạng thái **Đã gửi** được 7 ngày mà chưa có phản hồi → nút **📋 Theo dõi** báo, bảng theo dõi gắn nhãn **Nên follow-up**.
+- Mục Ứng tuyển có sẵn **mẫu email hỏi thăm** (theo ngôn ngữ của CV, mở đầu bằng "Dear"), nút copy tiêu đề / nội dung, và nút **Đã follow-up hôm nay** để tính lại 7 ngày.
+
+### 📄 14. Tên file PDF tự động
+- Khi in / Lưu PDF, tên file mặc định là `CV_TenBan_TenCongTy` (bỏ dấu, bỏ "Công ty TNHH", "JSC"...).
+
 ---
 
 ## 🧱 Cấu trúc mã nguồn
@@ -73,6 +85,7 @@ Công cụ tạo, quản lý và xuất CV A4 chuyên nghiệp dành cho Kỹ s�
 | `index.html` | Khung giao diện (form bên trái, xem trước A4 bên phải, bảng theo dõi) |
 | `app.js` | Logic chính: dữ liệu, form soạn, xem trước, profile, tracker |
 | `jd-match.js` | Bộ phân tích từ khóa JD ↔ CV (hàm thuần, không phụ thuộc DOM) |
+| `cv-lint.js` | Bộ kiểm tra chất lượng CV (hàm thuần, không phụ thuộc DOM) |
 | `style.css` | Giao diện ứng dụng và các mẫu CV |
 
 ---

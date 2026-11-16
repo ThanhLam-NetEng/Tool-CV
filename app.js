@@ -139,6 +139,7 @@ const defaultCvData = {
     status: 'draft',
     deadline: '',
     sentDate: '',
+    followedUp: '',
     jdLink: '',
     notes: '',
     jdText: ''
@@ -155,7 +156,7 @@ const APPLICATION_STATUSES = [
 ];
 
 function blankApplication() {
-  return { company: '', position: '', status: 'draft', deadline: '', sentDate: '', jdLink: '', notes: '', jdText: '' };
+  return { company: '', position: '', status: 'draft', deadline: '', sentDate: '', followedUp: '', jdLink: '', notes: '', jdText: '' };
 }
 
 function getStatusLabel(key) {
@@ -358,6 +359,10 @@ window.addEventListener('DOMContentLoaded', () => {
   setupEventListeners();
   setupTracker();
   updateBackupHint();
+  setupPrintFileName();
+  const lintBadge = document.getElementById('lint-badge');
+  if (lintBadge) lintBadge.addEventListener('click', openLintSection);
+  updateLintBadge();
   renderProfileDropdown();
   renderEditor();
   updatePreview();
@@ -426,16 +431,19 @@ function getActiveData() {
 }
 
 // Save active CV data and update preview
-let jdLiveRefresh = null;
+// Panels that follow CV edits (JD match, quality check). Reset on every renderEditor().
+let liveRefreshers = [];
 let jdRefreshTimer = null;
 
 function updateDataAndPreview() {
   saveProfilesToStorage();
   updatePreview();
   // Keep the JD match result in sync while the CV is being edited
-  if (jdLiveRefresh) {
+  // the quality badge is cheap and always visible: update right away
+  if (typeof updateLintBadge === 'function') updateLintBadge();
+  if (liveRefreshers.length) {
     clearTimeout(jdRefreshTimer);
-    jdRefreshTimer = setTimeout(() => { if (jdLiveRefresh) jdLiveRefresh(); }, 250);
+    jdRefreshTimer = setTimeout(() => { liveRefreshers.forEach(fn => fn()); }, 250);
   }
 }
 
@@ -643,12 +651,16 @@ function profileLabel(profile) {
 function updateTrackerButton() {
   const btn = document.getElementById('btn-tracker');
   if (!btn || typeof deadlineInfo !== 'function') return;
-  const urgent = getTrackerRows().filter(r => { const d = deadlineInfo(r.app); return d && d.level !== 'ok'; }).length;
-  btn.textContent = urgent ? `📋 Theo dõi (${urgent})` : '📋 Theo dõi';
-  btn.classList.toggle('has-alert', urgent > 0);
-  btn.title = urgent
-    ? `${urgent} CV sắp hoặc đã quá hạn nộp mà chưa gửi`
-    : 'Bảng theo dõi các CV đã gửi / đang ứng tuyển';
+  const rows = getTrackerRows();
+  const urgent = rows.filter(r => { const d = deadlineInfo(r.app); return d && d.level !== 'ok'; }).length;
+  const follow = rows.filter(r => { const f = followUpInfo(r.app); return f && f.due; }).length;
+  const total = urgent + follow;
+  btn.textContent = total ? `📋 Theo dõi (${total})` : '📋 Theo dõi';
+  btn.classList.toggle('has-alert', total > 0);
+  const why = [];
+  if (urgent) why.push(`${urgent} CV sắp hoặc đã quá hạn nộp mà chưa gửi`);
+  if (follow) why.push(`${follow} CV đã gửi ≥ ${FOLLOW_UP_DAYS} ngày chưa có phản hồi — nên follow-up`);
+  btn.title = why.length ? why.join('\n') : 'Bảng theo dõi các CV đã gửi / đang ứng tuyển';
 }
 
 function renderProfileDropdown() {
@@ -830,10 +842,12 @@ function buildApplicationSection(data) {
   hint.textContent = 'Ghi lại vị trí đang ứng tuyển bằng phiên bản CV này, rồi dán JD để xem CV đã có / còn thiếu từ khóa nào. Mục này không xuất hiện trên CV/PDF.';
   sec.appendChild(hint);
 
+  let renderFollowBox = () => {};
   const onMetaChange = () => {
     saveProfilesToStorage();
     renderProfileDropdown();
     if (typeof refreshTrackerIfOpen === 'function') refreshTrackerIfOpen();
+    renderFollowBox();
   };
 
   const rowNames = document.createElement('div');
@@ -859,6 +873,60 @@ function buildApplicationSection(data) {
   rowStatus.appendChild(deadlineGrp);
   rowStatus.appendChild(dateGrp);
   sec.appendChild(rowStatus);
+
+  // Follow-up helper (only once the CV has been sent)
+  const followBox = document.createElement('div');
+  followBox.className = 'follow-box';
+  renderFollowBox = () => {
+    followBox.innerHTML = '';
+    const info = followUpInfo(app);
+    followBox.hidden = !info;
+    if (!info) return;
+    followBox.classList.toggle('is-due', info.due);
+    const title = document.createElement('div');
+    title.className = 'follow-title';
+    title.textContent = info.due
+      ? `✉️ Đã ${info.since} ngày ${info.fromFollowUp ? 'kể từ lần follow-up trước' : 'kể từ khi gửi'} mà chưa có phản hồi — nên gửi email hỏi thăm`
+      : `✉️ ${info.fromFollowUp ? 'Đã follow-up' : 'Đã gửi'} ${info.since} ngày trước. Nhắc follow-up sau ${FOLLOW_UP_DAYS} ngày.`;
+    followBox.appendChild(title);
+
+    const mail = buildFollowUpEmail(getActiveData());
+    const preview = document.createElement('textarea');
+    preview.className = 'form-control follow-preview';
+    preview.rows = 7;
+    preview.readOnly = true;
+    preview.value = `${mail.subject}
+
+${mail.body}`;
+    followBox.appendChild(preview);
+
+    const actions = document.createElement('div');
+    actions.className = 'follow-actions';
+    const mk = (text, cls, fn, tip) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = `btn btn-secondary btn-sm ${cls}`;
+      b.textContent = text;
+      if (tip) b.title = tip;
+      b.addEventListener('click', () => fn(b));
+      actions.appendChild(b);
+      return b;
+    };
+    mk('📋 Copy tiêu đề', 'btn-copy-subject', async b => flashButton(b, (await copyText(mail.subject)) ? '✓ Đã copy' : '✕ Không copy được'));
+    mk('📋 Copy nội dung', 'btn-copy-body', async b => flashButton(b, (await copyText(mail.body)) ? '✓ Đã copy' : '✕ Không copy được'));
+    mk('✓ Đã follow-up hôm nay', 'btn-mark-followed', () => {
+      app.followedUp = todayIso();
+      onMetaChange();
+    }, `Ghi nhận đã gửi email hỏi thăm. Tool sẽ nhắc lại sau ${FOLLOW_UP_DAYS} ngày nếu vẫn chưa có phản hồi.`);
+    followBox.appendChild(actions);
+    const note = document.createElement('p');
+    note.className = 'helper-text';
+    note.textContent = 'Email viết theo ngôn ngữ của CV. Đọc lại và sửa cho đúng ngữ cảnh trước khi gửi (VD: thay "Anh/Chị" bằng tên người tuyển dụng nếu biết).';
+    followBox.appendChild(note);
+  };
+  sec.appendChild(followBox);
+  renderFollowBox();
+  liveRefreshers.push(() => { if (followBox.isConnected) renderFollowBox(); }); // name / phone / email in the template
 
   sec.appendChild(createTextInput('Link tin tuyển dụng (TopCV, LinkedIn...)', app.jdLink, val => { app.jdLink = val; onMetaChange(); }));
   sec.appendChild(createTextareaInput('Ghi chú (người liên hệ, hạn nộp, lịch phỏng vấn...)', app.notes, val => { app.notes = val; saveProfilesToStorage(); }));
@@ -891,10 +959,233 @@ function buildApplicationSection(data) {
   sec.appendChild(result);
 
   // After the first analysis the result follows CV edits automatically
-  jdLiveRefresh = () => {
+  liveRefreshers.push(() => {
     if (analyzed && result.isConnected) renderJdResult(result, getActiveData());
-  };
+  });
   return sec;
+}
+
+// ---- Follow-up reminder ----
+const FOLLOW_UP_DAYS = 7;
+
+// A sent CV with no answer for FOLLOW_UP_DAYS since the last contact (sent or last follow-up)
+function followUpInfo(app) {
+  if (!app || app.status !== 'sent' || !app.sentDate) return null;
+  const last = app.followedUp && app.followedUp > app.sentDate ? app.followedUp : app.sentDate;
+  const left = daysUntil(last);
+  if (left === null) return null;
+  const since = -left;
+  return { since, due: since >= FOLLOW_UP_DAYS, fromFollowUp: last === app.followedUp };
+}
+
+function cvLang(data) {
+  const t = (data.theme && data.theme.sectionTitles && data.theme.sectionTitles.experience) || '';
+  return /kinh nghi|làm việc/i.test(t) ? 'vi' : 'en';
+}
+
+function findContact(data, kind) {
+  const list = (data.header && data.header.contacts) || [];
+  const hit = list.find(c => {
+    const v = String((c && c.value) || '').trim();
+    if (kind === 'email') return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+    return /^[+\d][\d\s.()-]{6,}$/.test(v);
+  });
+  return hit ? String(hit.value).trim() : '';
+}
+
+function buildFollowUpEmail(data) {
+  const app = data.application;
+  const vi = cvLang(data) === 'vi';
+  const name = (data.header.name || '').trim() || (vi ? '[Họ tên]' : '[Your name]');
+  const pos = app.position.trim() || (vi ? '[vị trí]' : '[position]');
+  const company = app.company.trim() || (vi ? '[công ty]' : '[company]');
+  const date = formatDateVi(app.sentDate) || (vi ? '[ngày gửi]' : '[date]');
+  const sign = [findContact(data, 'phone'), findContact(data, 'email')].filter(Boolean).join(' | ');
+  if (vi) {
+    return {
+      subject: `Theo dõi hồ sơ ứng tuyển vị trí ${pos} – ${name}`,
+      body: [
+        'Dear Anh/Chị phụ trách Tuyển dụng,',
+        '',
+        `Em là ${name}, em đã gửi hồ sơ ứng tuyển vị trí ${pos} tại ${company} vào ngày ${date}. Em viết email này để hỏi thăm tình trạng hồ sơ của mình.`,
+        '',
+        'Em vẫn rất quan tâm đến vị trí này và mong có cơ hội trao đổi thêm với Anh/Chị. Nếu cần thêm thông tin, Anh/Chị vui lòng phản hồi giúp em.',
+        '',
+        'Em cảm ơn Anh/Chị đã dành thời gian xem xét.',
+        '',
+        'Trân trọng,',
+        name,
+        sign
+      ].filter((l, i, a) => !(i === a.length - 1 && !l)).join('\n')
+    };
+  }
+  return {
+    subject: `Follow-up on my application – ${pos} – ${name}`,
+    body: [
+      'Dear Hiring Team,',
+      '',
+      `I hope you are well. I applied for the ${pos} position at ${company} on ${date} and would like to follow up on my application.`,
+      '',
+      'I remain very interested in the role and would welcome the chance to discuss how I can contribute to your team. Please let me know if you need any further information from me.',
+      '',
+      'Thank you for your time and consideration.',
+      '',
+      'Best regards,',
+      name,
+      sign
+    ].filter((l, i, a) => !(i === a.length - 1 && !l)).join('\n')
+  };
+}
+
+async function copyText(text) {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch (e) { /* fall back below */ }
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.setAttribute('readonly', '');
+  ta.style.cssText = 'position:fixed;left:-9999px;top:0;';
+  document.body.appendChild(ta);
+  ta.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+  ta.remove();
+  return ok;
+}
+
+function flashButton(btn, text) {
+  const old = btn.textContent;
+  btn.textContent = text;
+  btn.disabled = true;
+  setTimeout(() => { btn.textContent = old; btn.disabled = false; }, 1400);
+}
+
+// ---- PDF file name (the browser uses document.title as the default file name) ----
+const COMPANY_NOISE = /\b(cong ty|cty|tnhh|co phan|cp|mtv|jsc|ltd|co|inc|corp|corporation|company|group|tap doan|vietnam|viet nam)\b/gi;
+
+function fileSlug(str, isCompany) {
+  let t = String(str || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D');
+  if (isCompany) t = t.replace(COMPANY_NOISE, ' ');
+  return t.split(/[^A-Za-z0-9]+/).filter(Boolean)
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .join('')
+    .slice(0, 40);
+}
+
+function pdfFileName(data) {
+  const parts = ['CV', fileSlug(data.header && data.header.name)];
+  const company = fileSlug(data.application && data.application.company, true);
+  if (company) parts.push(company);
+  return parts.filter(Boolean).join('_');
+}
+
+let titleBeforePrint = null;
+function setupPrintFileName() {
+  window.addEventListener('beforeprint', () => {
+    titleBeforePrint = document.title;
+    document.title = pdfFileName(getActiveData());
+  });
+  window.addEventListener('afterprint', () => {
+    if (titleBeforePrint !== null) document.title = titleBeforePrint;
+    titleBeforePrint = null;
+  });
+}
+
+// ---- CV quality check (uses cv-lint.js) ----
+const LINT_LEVELS = { error: ['Lỗi', '⛔'], warn: ['Nên sửa', '⚠️'], info: ['Gợi ý', '💡'] };
+
+function runLint() {
+  if (!window.CvLint) return null;
+  return window.CvLint.lint(visibleData(getActiveData()));
+}
+
+function updateLintBadge() {
+  const badge = document.getElementById('lint-badge');
+  if (!badge) return;
+  const r = runLint();
+  if (!r) { badge.hidden = true; return; }
+  badge.hidden = false;
+  const { error, warn, info } = r.counts;
+  badge.className = 'a4-status-badge lint-badge ' + (error ? 'over' : warn ? 'warning' : 'fit');
+  if (!error && !warn && !info) badge.textContent = '🩺 CV ổn';
+  else badge.textContent = '🩺 ' + [error && `${error} lỗi`, warn && `${warn} nên sửa`, info && `${info} gợi ý`].filter(Boolean).join(' · ');
+  badge.title = 'Bấm để xem chi tiết kiểm tra chất lượng CV';
+}
+
+function renderLintResult(container) {
+  container.innerHTML = '';
+  const r = runLint();
+  if (!r) {
+    const p = document.createElement('p');
+    p.className = 'helper-text';
+    p.textContent = 'Không tải được cv-lint.js — hãy kiểm tra file này nằm cùng thư mục với index.html.';
+    container.appendChild(p);
+    return;
+  }
+  const head = document.createElement('div');
+  head.className = 'lint-summary';
+  if (!r.issues.length) {
+    head.textContent = '✅ Không thấy vấn đề nào. CV gọn gàng!';
+    container.appendChild(head);
+    return;
+  }
+  head.textContent = Object.entries(LINT_LEVELS)
+    .filter(([k]) => r.counts[k])
+    .map(([k, [label, icon]]) => `${icon} ${r.counts[k]} ${label.toLowerCase()}`)
+    .join('   ');
+  container.appendChild(head);
+
+  const list = document.createElement('ul');
+  list.className = 'lint-list';
+  r.issues.forEach(issue => {
+    const li = document.createElement('li');
+    li.className = `lint-item lint-${issue.level}`;
+    const top = document.createElement('div');
+    top.className = 'lint-msg';
+    top.textContent = `${LINT_LEVELS[issue.level][1]} ${issue.msg}`;
+    const where = document.createElement('div');
+    where.className = 'lint-where';
+    where.textContent = issue.where;
+    li.appendChild(top);
+    li.appendChild(where);
+    if (issue.tip) {
+      const tip = document.createElement('div');
+      tip.className = 'lint-tip';
+      tip.textContent = '→ ' + issue.tip;
+      li.appendChild(tip);
+    }
+    list.appendChild(li);
+  });
+  container.appendChild(list);
+}
+
+function buildLintSection(data) {
+  const sec = createFormSection('🩺 Kiểm tra chất lượng CV');
+  sec.id = 'lint-section';
+  const hint = document.createElement('p');
+  hint.className = 'helper-text mb-2';
+  hint.textContent = 'Tự động soát các lỗi hay gặp: thiếu thông tin, email/SĐT sai, câu mở đầu yếu, dòng quá dài, trùng lặp, thiếu số liệu, ngày tháng lệch kiểu. Chỉ xét phần đang hiển thị trên CV.';
+  sec.appendChild(hint);
+  const result = document.createElement('div');
+  result.className = 'lint-result';
+  sec.appendChild(result);
+  const refresh = () => { if (sec.open && result.isConnected) renderLintResult(result); };
+  sec.refreshLint = refresh;
+  sec.addEventListener('toggle', refresh);
+  refresh();
+  liveRefreshers.push(refresh);
+  return sec;
+}
+
+function openLintSection() {
+  const sec = document.getElementById('lint-section');
+  if (!sec) return;
+  sec.open = true;
+  if (sec.refreshLint) sec.refreshLint(); // 'toggle' fires async; render now
+  sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // ---- Tracker overlay (table of every CV version + its application status) ----
@@ -910,6 +1201,9 @@ function getTrackerRows() {
     if (ua && ub) return ua.localeCompare(ub);   // nearest deadline first
     if (ua) return -1;
     if (ub) return 1;
+    const fa = followUpInfo(a.app), fb = followUpInfo(b.app);
+    const da = !!(fa && fa.due), db = !!(fb && fb.due);
+    if (da !== db) return da ? -1 : 1;
     if (a.app.sentDate && b.app.sentDate) return b.app.sentDate.localeCompare(a.app.sentDate);
     if (a.app.sentDate) return -1;
     if (b.app.sentDate) return 1;
@@ -937,6 +1231,13 @@ function renderTracker() {
   });
 
   const urgent = rows.filter(r => { const d = deadlineInfo(r.app); return d && d.level !== 'ok'; }).length;
+  const follow = rows.filter(r => { const f = followUpInfo(r.app); return f && f.due; }).length;
+  if (follow) {
+    const badge = document.createElement('span');
+    badge.className = 'status-badge dl-soon';
+    badge.textContent = `✉️ Nên follow-up: ${follow}`;
+    summary.insertBefore(badge, summary.firstChild);
+  }
   if (urgent) {
     const badge = document.createElement('span');
     badge.className = 'status-badge dl-over';
@@ -976,7 +1277,16 @@ function renderTracker() {
       tdDeadline.textContent = '—';
     }
     tr.appendChild(tdDeadline);
-    cell(formatDateVi(r.app.sentDate) || '—');
+    const tdSent = cell(formatDateVi(r.app.sentDate) || '—');
+    const fu = followUpInfo(r.app);
+    if (fu && fu.due) {
+      const b = document.createElement('span');
+      b.className = 'status-badge dl-soon';
+      b.textContent = `Nên follow-up (${fu.since} ngày)`;
+      b.title = 'Mở phiên bản này để lấy mẫu email hỏi thăm';
+      tdSent.appendChild(document.createTextNode(' '));
+      tdSent.appendChild(b);
+    }
     const tdLink = document.createElement('td');
     const url = r.app.jdLink ? formatUrl(r.app.jdLink) : '';
     if (/^https?:\/\//i.test(url)) {
@@ -1028,12 +1338,12 @@ function csvCell(value) {
 }
 
 function buildTrackerCsv() {
-  const header = ['Phiên bản CV', 'Công ty', 'Vị trí', 'Trạng thái', 'Hạn nộp', 'Ngày gửi', 'Link JD', 'Ghi chú'];
+  const header = ['Phiên bản CV', 'Công ty', 'Vị trí', 'Trạng thái', 'Hạn nộp', 'Ngày gửi', 'Follow-up gần nhất', 'Link JD', 'Ghi chú'];
   const lines = [header.map(csvCell).join(',')];
   getTrackerRows().forEach(r => {
     lines.push([
       r.name, r.app.company, r.app.position, getStatusLabel(r.app.status),
-      formatDateVi(r.app.deadline), formatDateVi(r.app.sentDate), r.app.jdLink, r.app.notes
+      formatDateVi(r.app.deadline), formatDateVi(r.app.sentDate), formatDateVi(r.app.followedUp), r.app.jdLink, r.app.notes
     ].map(csvCell).join(','));
   });
   return '﻿' + lines.join('\r\n'); // BOM so Excel reads Vietnamese correctly
@@ -1248,8 +1558,10 @@ function renderEditor() {
   document.title = `CV - ${currentUserName}`;
 
   // 0. Application tracking + JD matcher
-  jdLiveRefresh = null;
+  liveRefreshers = [];
+  if (typeof updateLintBadge === 'function') setTimeout(updateLintBadge, 0);
   editor.appendChild(buildApplicationSection(data));
+  editor.appendChild(buildLintSection(data));
 
   // 1. Theme and Fonts Section
   const secTheme = createFormSection('Theme & Font (Màu sắc và Bố cục)');
